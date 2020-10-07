@@ -166,7 +166,7 @@ class Domain:
 
     @classmethod
     def from_dict(cls, data: Dict) -> "Domain":
-        utter_templates = data.get(KEY_RESPONSES, {})
+        utter_responses = data.get(KEY_RESPONSES, {})
         slots = cls.collect_slots(data.get(KEY_SLOTS, {}))
         additional_arguments = data.get("config", {})
         session_config = cls._get_session_config(data.get(SESSION_CONFIG_KEY, {}))
@@ -176,7 +176,7 @@ class Domain:
             intents,
             data.get(KEY_ENTITIES, []),
             slots,
-            utter_templates,
+            utter_responses,
             data.get(KEY_ACTIONS, []),
             data.get(KEY_FORMS, []),
             data.get(KEY_E2E_ACTIONS, []),
@@ -423,7 +423,7 @@ class Domain:
         intents: Union[Set[Text], List[Text], List[Dict[Text, Any]]],
         entities: List[Text],
         slots: List[Slot],
-        templates: Dict[Text, List[Dict[Text, Any]]],
+        responses: Dict[Text, List[Dict[Text, Any]]],
         action_names: List[Text],
         forms: Union[Dict[Text, Any], List[Text]],
         action_texts: Optional[List[Text]] = None,
@@ -442,14 +442,14 @@ class Domain:
         self._initialize_forms(forms)
 
         self.slots = slots
-        self.templates = templates
+        self.responses = responses
         self.action_texts = action_texts or []
         self.session_config = session_config
 
         self._custom_actions = action_names
 
         # only includes custom actions and utterance actions
-        self.user_actions = self._combine_with_templates(action_names, templates)
+        self.user_actions = self._combine_with_responses(action_names, responses)
 
         # includes all actions (custom, utterance, default actions and forms)
         self.action_names = (
@@ -611,8 +611,8 @@ class Domain:
     def random_template_for(self, utter_action: Text) -> Optional[Dict[Text, Any]]:
         import numpy as np
 
-        if utter_action in self.templates:
-            return np.random.choice(self.templates[utter_action])
+        if utter_action in self.responses:
+            return np.random.choice(self.responses[utter_action])
         else:
             return None
 
@@ -842,7 +842,7 @@ class Domain:
             KEY_INTENTS: self._transform_intents_for_file(),
             KEY_ENTITIES: self.entities,
             KEY_SLOTS: self._slot_definitions(),
-            KEY_RESPONSES: self.templates,
+            KEY_RESPONSES: self.responses,
             KEY_ACTIONS: self._custom_actions,  # class names of the actions
             KEY_FORMS: self.forms,
             KEY_E2E_ACTIONS: self.action_texts,
@@ -999,12 +999,12 @@ class Domain:
         return {"in_domain": in_domain_diff, "in_training_data": in_training_data_diff}
 
     @staticmethod
-    def _combine_with_templates(
-        actions: List[Text], templates: Dict[Text, Any]
+    def _combine_with_responses(
+        actions: List[Text], responses: Dict[Text, Any]
     ) -> List[Text]:
         """Combines actions with utter actions listed in responses section."""
         unique_template_names = [
-            a for a in sorted(list(templates.keys())) if a not in actions
+            a for a in sorted(list(responses.keys())) if a not in actions
         ]
         return actions + unique_template_names
 
@@ -1150,7 +1150,7 @@ class Domain:
                 )
             )
 
-    def check_missing_templates(self) -> None:
+    def check_missing_responses(self) -> None:
         """Warn user of utterance names which have no specified template."""
 
         utterances = [
@@ -1159,10 +1159,10 @@ class Domain:
             if a.startswith(rasa.shared.constants.UTTER_PREFIX)
         ]
 
-        missing_templates = [t for t in utterances if t not in self.templates.keys()]
+        missing_responses = [t for t in utterances if t not in self.responses.keys()]
 
-        if missing_templates:
-            for template in missing_templates:
+        if missing_responses:
+            for template in missing_responses:
                 rasa.shared.utils.io.raise_warning(
                     f"Action '{template}' is listed as a "
                     f"response action in the domain file, but there is "

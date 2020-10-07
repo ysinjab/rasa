@@ -106,7 +106,7 @@ class RasaNLUModelConfig:
         elif isinstance(self.__dict__["pipeline"], str):
             # DEPRECATION EXCEPTION - remove in 2.1
             raise Exception(
-                f"You are using a pipeline template. All pipelines templates "
+                f"You are using a pipeline template. All pipelines responses "
                 f"have been removed in 2.0. Please add "
                 f"the components you want to use directly to your configuration "
                 f"file. {DOCS_URL_MIGRATION_GUIDE}"

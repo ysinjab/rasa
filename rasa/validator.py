@@ -132,7 +132,7 @@ class Validator:
         """Return all utterances which are actions."""
         return {
             utterance
-            for utterance in self.domain.templates.keys()
+            for utterance in self.domain.responses.keys()
             if utterance in self.domain.action_names
         }
 
@@ -140,10 +140,10 @@ class Validator:
         """Compares list of utterances in actions with utterances in responses."""
 
         actions = self.domain.action_names
-        utterance_templates = set(self.domain.templates)
+        utterance_responses = set(self.domain.responses)
         everything_is_alright = True
 
-        for utterance in utterance_templates:
+        for utterance in utterance_responses:
             if utterance not in actions:
                 logger.debug(
                     f"The utterance '{utterance}' is not listed under 'actions' in the "
@@ -153,7 +153,7 @@ class Validator:
 
         for action in actions:
             if action.startswith(UTTER_PREFIX):
-                if action not in utterance_templates:
+                if action not in utterance_responses:
                     rasa.shared.utils.io.raise_warning(
                         f"There is no template for the utterance action '{action}'. "
                         f"The action is listed in your domains action list, but "
