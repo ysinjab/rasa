@@ -14,13 +14,8 @@ entities:
 
 responses:
   utter_greet:
-    - hey there!
+    - text: hey there!
   utter_goodbye:
-    - goodbye :(
+    - text: goodbye :(
   utter_default:
-    - default message
-
-actions:
-  - utter_default
-  - utter_greet
-  - utter_goodbye
+    - text: default message

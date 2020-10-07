@@ -1,65 +1,46 @@
 import numpy as np
-import scipy.sparse
-from typing import Any, Text, Union, Optional
-from rasa.nlu.training_data import Message
+from typing import Text, Optional, Dict, Any
+
+from rasa.nlu.constants import FEATURIZER_CLASS_ALIAS
 from rasa.nlu.components import Component
-from rasa.nlu.constants import SPARSE_FEATURE_NAMES, DENSE_FEATURE_NAMES, TEXT_ATTRIBUTE
-
-
-def sequence_to_sentence_features(
-    features: Union[np.ndarray, scipy.sparse.spmatrix]
-) -> Optional[Union[np.ndarray, scipy.sparse.spmatrix]]:
-    """Extract the CLS token vector as sentence features.
-
-    Features is a sequence. The last token is the CLS token. The feature vector of
-    this token contains the sentence features."""
-
-    if features is None:
-        return None
-
-    if isinstance(features, scipy.sparse.spmatrix):
-        return scipy.sparse.coo_matrix(features.tocsr()[-1])
-
-    return np.expand_dims(features[-1], axis=0)
+from rasa.utils.tensorflow.constants import MEAN_POOLING, MAX_POOLING
 
 
 class Featurizer(Component):
+    def __init__(self, component_config: Optional[Dict[Text, Any]] = None) -> None:
+        if not component_config:
+            component_config = {}
+
+        # makes sure the alias name is set
+        component_config.setdefault(FEATURIZER_CLASS_ALIAS, self.name)
+
+        super().__init__(component_config)
+
+
+class DenseFeaturizer(Featurizer):
     @staticmethod
-    def _combine_with_existing_dense_features(
-        message: Message,
-        additional_features: Any,
-        feature_name: Text = DENSE_FEATURE_NAMES[TEXT_ATTRIBUTE],
-    ) -> Any:
-        if message.get(feature_name) is not None:
+    def _calculate_sentence_features(
+        features: np.ndarray, pooling_operation: Text
+    ) -> np.ndarray:
+        # take only non zeros feature vectors into account
+        non_zero_features = np.array([f for f in features if f.any()])
 
-            if len(message.get(feature_name)) != len(additional_features):
-                raise ValueError(
-                    f"Cannot concatenate dense features as sequence dimension does not "
-                    f"match: {len(message.get(feature_name))} != "
-                    f"{len(additional_features)}. Message: '{message.text}'."
-                )
+        # if features are all zero just return a vector with all zeros
+        if non_zero_features.size == 0:
+            return np.zeros([1, features.shape[-1]])
 
-            return np.concatenate(
-                (message.get(feature_name), additional_features), axis=-1
-            )
-        else:
-            return additional_features
+        if pooling_operation == MEAN_POOLING:
+            return np.mean(non_zero_features, axis=0, keepdims=True)
 
-    @staticmethod
-    def _combine_with_existing_sparse_features(
-        message: Message,
-        additional_features: Any,
-        feature_name: Text = SPARSE_FEATURE_NAMES[TEXT_ATTRIBUTE],
-    ) -> Any:
-        if message.get(feature_name) is not None:
-            from scipy.sparse import hstack
+        if pooling_operation == MAX_POOLING:
+            return np.max(non_zero_features, axis=0, keepdims=True)
 
-            if message.get(feature_name).shape[0] != additional_features.shape[0]:
-                raise ValueError(
-                    f"Cannot concatenate sparse features as sequence dimension does not "
-                    f"match: {message.get(feature_name).shape[0]} != "
-                    f"{additional_features.shape[0]}. Message: '{message.text}'."
-                )
-            return hstack([message.get(feature_name), additional_features])
-        else:
-            return additional_features
+        raise ValueError(
+            f"Invalid pooling operation specified. Available operations are "
+            f"'{MEAN_POOLING}' or '{MAX_POOLING}', but provided value is "
+            f"'{pooling_operation}'."
+        )
+
+
+class SparseFeaturizer(Featurizer):
+    pass

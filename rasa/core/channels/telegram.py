@@ -14,7 +14,8 @@ from telegram import (
 from typing import Dict, Text, Any, List, Optional, Callable, Awaitable
 
 from rasa.core.channels.channel import InputChannel, UserMessage, OutputChannel
-from rasa.core.constants import INTENT_MESSAGE_PREFIX, USER_INTENT_RESTART
+from rasa.shared.constants import INTENT_MESSAGE_PREFIX
+from rasa.shared.core.constants import USER_INTENT_RESTART
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 class TelegramOutput(Bot, OutputChannel):
     """Output channel for Telegram"""
 
+    # skipcq: PYL-W0236
     @classmethod
     def name(cls) -> Text:
         return "telegram"
@@ -32,7 +34,7 @@ class TelegramOutput(Bot, OutputChannel):
     async def send_text_message(
         self, recipient_id: Text, text: Text, **kwargs: Any
     ) -> None:
-        for message_part in text.split("\n\n"):
+        for message_part in text.strip().split("\n\n"):
             self.send_message(recipient_id, message_part)
 
     async def send_image_url(

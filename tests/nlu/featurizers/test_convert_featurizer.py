@@ -1,77 +1,91 @@
 import numpy as np
 import pytest
 
-from rasa.nlu.tokenizers.tokenizer import Tokenizer
-from rasa.nlu.training_data import TrainingData
 from rasa.nlu.tokenizers.convert_tokenizer import ConveRTTokenizer
-from rasa.nlu.constants import (
-    TEXT_ATTRIBUTE,
-    DENSE_FEATURE_NAMES,
-    TOKENS_NAMES,
-    RESPONSE_ATTRIBUTE,
-    INTENT_ATTRIBUTE,
-)
-from rasa.nlu.training_data import Message
+from rasa.shared.nlu.training_data.training_data import TrainingData
+from rasa.shared.nlu.training_data.message import Message
+from rasa.nlu.constants import TOKENS_NAMES
+from rasa.shared.nlu.constants import TEXT, INTENT, RESPONSE
 from rasa.nlu.config import RasaNLUModelConfig
 from rasa.nlu.featurizers.dense_featurizer.convert_featurizer import ConveRTFeaturizer
 
 
-def test_convert_featurizer_process():
-    featurizer = ConveRTFeaturizer.create({}, RasaNLUModelConfig())
+# TODO
+#   skip tests as the ConveRT model is not publicly available anymore (see https://github.com/RasaHQ/rasa/issues/6806)
+
+
+@pytest.mark.skip
+def test_convert_featurizer_process(component_builder):
+    tokenizer = component_builder.create_component_from_class(ConveRTTokenizer)
+    featurizer = component_builder.create_component_from_class(ConveRTFeaturizer)
 
     sentence = "Hey how are you today ?"
-    message = Message(sentence)
-    tokens = ConveRTTokenizer().tokenize(message, attribute=TEXT_ATTRIBUTE)
-    tokens = Tokenizer.add_cls_token(tokens, attribute=TEXT_ATTRIBUTE)
-    message.set(TOKENS_NAMES[TEXT_ATTRIBUTE], tokens)
+    message = Message(data={TEXT: sentence})
+    tokens = tokenizer.tokenize(message, attribute=TEXT)
+    message.set(TOKENS_NAMES[TEXT], tokens)
 
-    featurizer.process(message)
+    featurizer.process(message, tf_hub_module=tokenizer.module)
 
     expected = np.array([2.2636216, -0.26475656, -1.1358104, -0.49751878, -1.3946456])
     expected_cls = np.array(
         [1.0251294, -0.04053932, -0.7018805, -0.82054937, -0.75054353]
     )
 
-    vecs = message.get(DENSE_FEATURE_NAMES[TEXT_ATTRIBUTE])
+    seq_vecs, sent_vecs = message.get_dense_features(TEXT, [])
 
-    assert len(tokens) == len(vecs)
-    assert np.allclose(vecs[0][:5], expected, atol=1e-5)
-    assert np.allclose(vecs[-1][:5], expected_cls, atol=1e-5)
+    seq_vecs = seq_vecs.features
+    sent_vecs = sent_vecs.features
+
+    assert len(tokens) == len(seq_vecs)
+    assert np.allclose(seq_vecs[0][:5], expected, atol=1e-5)
+    assert np.allclose(sent_vecs[-1][:5], expected_cls, atol=1e-5)
 
 
-def test_convert_featurizer_train():
-    featurizer = ConveRTFeaturizer.create({}, RasaNLUModelConfig())
+@pytest.mark.skip
+def test_convert_featurizer_train(component_builder):
+    tokenizer = component_builder.create_component_from_class(ConveRTTokenizer)
+    featurizer = component_builder.create_component_from_class(ConveRTFeaturizer)
 
     sentence = "Hey how are you today ?"
-    message = Message(sentence)
-    message.set(RESPONSE_ATTRIBUTE, sentence)
-    tokens = ConveRTTokenizer().tokenize(message, attribute=TEXT_ATTRIBUTE)
-    tokens = Tokenizer.add_cls_token(tokens, attribute=TEXT_ATTRIBUTE)
-    message.set(TOKENS_NAMES[TEXT_ATTRIBUTE], tokens)
-    message.set(TOKENS_NAMES[RESPONSE_ATTRIBUTE], tokens)
+    message = Message(data={TEXT: sentence})
+    message.set(RESPONSE, sentence)
 
-    featurizer.train(TrainingData([message]), RasaNLUModelConfig())
+    tokens = tokenizer.tokenize(message, attribute=TEXT)
+
+    message.set(TOKENS_NAMES[TEXT], tokens)
+    message.set(TOKENS_NAMES[RESPONSE], tokens)
+
+    featurizer.train(
+        TrainingData([message]), RasaNLUModelConfig(), tf_hub_module=tokenizer.module
+    )
 
     expected = np.array([2.2636216, -0.26475656, -1.1358104, -0.49751878, -1.3946456])
     expected_cls = np.array(
         [1.0251294, -0.04053932, -0.7018805, -0.82054937, -0.75054353]
     )
 
-    vecs = message.get(DENSE_FEATURE_NAMES[TEXT_ATTRIBUTE])
+    seq_vecs, sent_vecs = message.get_dense_features(TEXT, [])
 
-    assert len(tokens) == len(vecs)
-    assert np.allclose(vecs[0][:5], expected, atol=1e-5)
-    assert np.allclose(vecs[-1][:5], expected_cls, atol=1e-5)
+    seq_vecs = seq_vecs.features
+    sent_vecs = sent_vecs.features
 
-    vecs = message.get(DENSE_FEATURE_NAMES[RESPONSE_ATTRIBUTE])
+    assert len(tokens) == len(seq_vecs)
+    assert np.allclose(seq_vecs[0][:5], expected, atol=1e-5)
+    assert np.allclose(sent_vecs[-1][:5], expected_cls, atol=1e-5)
 
-    assert len(tokens) == len(vecs)
-    assert np.allclose(vecs[0][:5], expected, atol=1e-5)
-    assert np.allclose(vecs[-1][:5], expected_cls, atol=1e-5)
+    seq_vecs, sent_vecs = message.get_dense_features(RESPONSE, [])
 
-    vecs = message.get(DENSE_FEATURE_NAMES[INTENT_ATTRIBUTE])
+    seq_vecs = seq_vecs.features
+    sent_vecs = sent_vecs.features
 
-    assert vecs is None
+    assert len(tokens) == len(seq_vecs)
+    assert np.allclose(seq_vecs[0][:5], expected, atol=1e-5)
+    assert np.allclose(sent_vecs[-1][:5], expected_cls, atol=1e-5)
+
+    seq_vecs, sent_vecs = message.get_dense_features(INTENT, [])
+
+    assert seq_vecs is None
+    assert sent_vecs is None
 
 
 @pytest.mark.parametrize(
@@ -84,8 +98,10 @@ def test_convert_featurizer_train():
         ("ńöñàśçií", "ńöñàśçií"),
     ],
 )
-def test_convert_featurizer_tokens_to_text(sentence, expected_text):
-    tokens = ConveRTTokenizer().tokenize(Message(sentence), attribute=TEXT_ATTRIBUTE)
+@pytest.mark.skip
+def test_convert_featurizer_tokens_to_text(component_builder, sentence, expected_text):
+    tokenizer = component_builder.create_component_from_class(ConveRTTokenizer)
+    tokens = tokenizer.tokenize(Message(data={TEXT: sentence}), attribute=TEXT)
 
     actual_text = ConveRTFeaturizer._tokens_to_text([tokens])[0]
 

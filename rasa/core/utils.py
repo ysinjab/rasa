@@ -7,7 +7,6 @@ import sys
 from asyncio import Future
 from decimal import Decimal
 from hashlib import md5, sha1
-from io import StringIO
 from pathlib import Path
 from typing import (
     Any,
@@ -17,7 +16,6 @@ from typing import (
     List,
     Optional,
     Set,
-    TYPE_CHECKING,
     Text,
     Tuple,
     Union,
@@ -25,9 +23,12 @@ from typing import (
 
 import aiohttp
 import numpy as np
+
+import rasa.shared.utils.io
 import rasa.utils.io as io_utils
 from aiohttp import InvalidURL
 from rasa.constants import DEFAULT_SANIC_WORKERS, ENV_SANIC_WORKERS
+from rasa.shared.constants import DEFAULT_ENDPOINTS_PATH
 
 # backwards compatibility 1.0.x
 # noinspection PyUnresolvedReferences
@@ -35,45 +36,30 @@ from rasa.core.lock_store import LockStore, RedisLockStore
 from rasa.utils.endpoints import EndpointConfig, read_endpoint_config
 from sanic import Sanic
 from sanic.views import CompositionView
+import rasa.cli.utils as cli_utils
 
 logger = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-    from random import Random
 
+def configure_file_logging(
+    logger_obj: logging.Logger, log_file: Optional[Text]
+) -> None:
+    """Configure logging to a file.
 
-def configure_file_logging(logger_obj: logging.Logger, log_file: Optional[Text]):
+    Args:
+        logger_obj: Logger object to configure.
+        log_file: Path of log file to write to.
+    """
     if not log_file:
         return
 
     formatter = logging.Formatter("%(asctime)s [%(levelname)-5.5s]  %(message)s")
-    file_handler = logging.FileHandler(log_file, encoding=io_utils.DEFAULT_ENCODING)
+    file_handler = logging.FileHandler(
+        log_file, encoding=rasa.shared.utils.io.DEFAULT_ENCODING
+    )
     file_handler.setLevel(logger_obj.level)
     file_handler.setFormatter(formatter)
     logger_obj.addHandler(file_handler)
-
-
-def module_path_from_instance(inst: Any) -> Text:
-    """Return the module path of an instance's class."""
-    return inst.__module__ + "." + inst.__class__.__name__
-
-
-def subsample_array(
-    arr: List[Any],
-    max_values: int,
-    can_modify_incoming_array: bool = True,
-    rand: Optional["Random"] = None,
-) -> List[Any]:
-    """Shuffles the array and returns `max_values` number of elements."""
-    import random
-
-    if not can_modify_incoming_array:
-        arr = arr[:]
-    if rand is not None:
-        rand.shuffle(arr)
-    else:
-        random.shuffle(arr)
-    return arr[:max_values]
 
 
 def is_int(value: Any) -> bool:
@@ -89,6 +75,16 @@ def is_int(value: Any) -> bool:
 
 
 def one_hot(hot_idx: int, length: int, dtype: Optional[Text] = None) -> np.ndarray:
+    """Create a one-hot array.
+
+    Args:
+        hot_idx: Index of the hot element.
+        length: Length of the array.
+        dtype: ``numpy.dtype`` of the array.
+
+    Returns:
+        One-hot array.
+    """
     if hot_idx >= length:
         raise ValueError(
             "Can't create one hot. Index '{}' is out "
@@ -99,48 +95,7 @@ def one_hot(hot_idx: int, length: int, dtype: Optional[Text] = None) -> np.ndarr
     return r
 
 
-def str_range_list(start: int, end: int) -> List[Text]:
-    return [str(e) for e in range(start, end)]
-
-
-def generate_id(prefix: Text = "", max_chars: Optional[int] = None) -> Text:
-    import uuid
-
-    gid = uuid.uuid4().hex
-    if max_chars:
-        gid = gid[:max_chars]
-
-    return f"{prefix}{gid}"
-
-
-def request_input(
-    valid_values: Optional[List[Text]] = None,
-    prompt: Optional[Text] = None,
-    max_suggested: int = 3,
-) -> Text:
-    def wrong_input_message():
-        print(
-            "Invalid answer, only {}{} allowed\n".format(
-                ", ".join(valid_values[:max_suggested]),
-                ",..." if len(valid_values) > max_suggested else "",
-            )
-        )
-
-    while True:
-        try:
-            input_value = input(prompt) if prompt else input()
-            if valid_values is not None and input_value not in valid_values:
-                wrong_input_message()
-                continue
-        except ValueError:
-            wrong_input_message()
-            continue
-        return input_value
-
-
 # noinspection PyPep8Naming
-
-
 class HashableNDArray:
     """Hashable wrapper for ndarray objects.
 
@@ -188,28 +143,19 @@ class HashableNDArray:
         return self.__wrapped
 
 
-def _dump_yaml(obj: Dict, output: Union[Text, Path, StringIO]) -> None:
-    import ruamel.yaml
+def dump_obj_as_yaml_to_file(
+    filename: Union[Text, Path], obj: Any, should_preserve_key_order: bool = False
+) -> None:
+    """Writes `obj` to the filename in YAML repr.
 
-    yaml_writer = ruamel.yaml.YAML(pure=True, typ="safe")
-    yaml_writer.unicode_supplementary = True
-    yaml_writer.default_flow_style = False
-    yaml_writer.version = "1.1"
-
-    yaml_writer.dump(obj, output)
-
-
-def dump_obj_as_yaml_to_file(filename: Union[Text, Path], obj: Dict) -> None:
-    """Writes data (python dict) to the filename in yaml repr."""
-
-    io_utils.write_yaml_file(obj, filename)
-
-
-def dump_obj_as_yaml_to_string(obj: Dict) -> Text:
-    """Writes data (python dict) to a yaml string."""
-    str_io = StringIO()
-    _dump_yaml(obj, str_io)
-    return str_io.getvalue()
+    Args:
+        filename: Target filename.
+        obj: Object to dump.
+        should_preserve_key_order: Whether to preserve key order in `obj`.
+    """
+    rasa.shared.utils.io.write_yaml(
+        obj, filename, should_preserve_key_order=should_preserve_key_order
+    )
 
 
 def list_routes(app: Sanic):
@@ -252,20 +198,6 @@ def list_routes(app: Sanic):
     return output
 
 
-def cap_length(s: Text, char_limit: int = 20, append_ellipsis: bool = True) -> Text:
-    """Makes sure the string doesn't exceed the passed char limit.
-
-    Appends an ellipsis if the string is too long."""
-
-    if len(s) > char_limit:
-        if append_ellipsis:
-            return s[: char_limit - 3] + "..."
-        else:
-            return s[:char_limit]
-    else:
-        return s
-
-
 def extract_args(
     kwargs: Dict[Text, Any], keys_to_extract: Set[Text]
 ) -> Tuple[Dict[Text, Any], Dict[Text, Any]]:
@@ -284,15 +216,16 @@ def extract_args(
     return extracted, remaining
 
 
-def all_subclasses(cls: Any) -> List[Any]:
-    """Returns all known (imported) subclasses of a class."""
-
-    return cls.__subclasses__() + [
-        g for s in cls.__subclasses__() for g in all_subclasses(s)
-    ]
-
-
 def is_limit_reached(num_messages: int, limit: int) -> bool:
+    """Determine whether the number of messages has reached a limit.
+
+    Args:
+        num_messages: The number of messages to check.
+        limit: Limit on the number of messages.
+
+    Returns:
+        `True` if the limit has been reached, otherwise `False`.
+    """
     return limit is not None and num_messages >= limit
 
 
@@ -303,7 +236,7 @@ def read_lines(
 
     line_filter = re.compile(line_pattern)
 
-    with open(filename, "r", encoding=io_utils.DEFAULT_ENCODING) as f:
+    with open(filename, "r", encoding=rasa.shared.utils.io.DEFAULT_ENCODING) as f:
         num_messages = 0
         for line in f:
             m = line_filter.match(line)
@@ -325,7 +258,7 @@ def convert_bytes_to_string(data: Union[bytes, bytearray, Text]) -> Text:
     """Convert `data` to string if it is a bytes-like object."""
 
     if isinstance(data, (bytes, bytearray)):
-        return data.decode(io_utils.DEFAULT_ENCODING)
+        return data.decode(rasa.shared.utils.io.DEFAULT_ENCODING)
 
     return data
 
@@ -335,12 +268,9 @@ def get_file_hash(path: Text) -> Text:
     return md5(file_as_bytes(path)).hexdigest()
 
 
-def get_text_hash(text: Text, encoding: Text = io_utils.DEFAULT_ENCODING) -> Text:
-    """Calculate the md5 hash for a text."""
-    return md5(text.encode(encoding)).hexdigest()
-
-
-def get_dict_hash(data: Dict, encoding: Text = io_utils.DEFAULT_ENCODING) -> Text:
+def get_dict_hash(
+    data: Dict, encoding: Text = rasa.shared.utils.io.DEFAULT_ENCODING
+) -> Text:
     """Calculate the md5 hash of a dictionary."""
     return md5(json.dumps(data, sort_keys=True).encode(encoding)).hexdigest()
 
@@ -360,11 +290,6 @@ async def download_file_from_url(url: Text) -> Text:
             filename = io_utils.create_temporary_file(await resp.read(), mode="w+b")
 
     return filename
-
-
-def remove_none_values(obj: Dict[Text, Any]) -> Dict[Text, Any]:
-    """Remove all keys that store a `None` value."""
-    return {k: v for k, v in obj.items() if v is not None}
 
 
 def pad_lists_to_size(
@@ -418,6 +343,25 @@ class AvailableEndpoints:
         self.event_broker = event_broker
 
 
+def read_endpoints_from_path(
+    endpoints_path: Union[Path, Text, None] = None
+) -> AvailableEndpoints:
+    """Get `AvailableEndpoints` object from specified path.
+
+    Args:
+        endpoints_path: Path of the endpoints file to be read. If `None` the
+            default path for that file is used (`endpoints.yml`).
+
+    Returns:
+        `AvailableEndpoints` object read from endpoints file.
+
+    """
+    endpoints_config_path = cli_utils.get_validated_path(
+        endpoints_path, "endpoints", DEFAULT_ENDPOINTS_PATH, True
+    )
+    return AvailableEndpoints.read_endpoints(endpoints_config_path)
+
+
 # noinspection PyProtectedMember
 def set_default_subparser(parser, default_subparser) -> None:
     """default subparser selection. Call after setup, just before parse_args()
@@ -458,38 +402,61 @@ def create_task_error_logger(error_message: Text = "") -> Callable[[Future], Non
     return handler
 
 
-def replace_floats_with_decimals(obj: Union[List, Dict], round_digits: int = 9) -> Any:
+def replace_floats_with_decimals(obj: Any, round_digits: int = 9) -> Any:
+    """Convert all instances in `obj` of `float` to `Decimal`.
+
+    Args:
+        obj: Input object.
+        round_digits: Rounding precision of `Decimal` values.
+
+    Returns:
+        Input `obj` with all `float` types replaced by `Decimal`s rounded to
+        `round_digits` decimal places.
     """
-    Utility method to recursively walk a dictionary or list converting all `float` to `Decimal` as required by DynamoDb.
+
+    def _float_to_rounded_decimal(s: Text) -> Decimal:
+        return Decimal(s).quantize(Decimal(10) ** -round_digits)
+
+    return json.loads(json.dumps(obj), parse_float=_float_to_rounded_decimal)
+
+
+class DecimalEncoder(json.JSONEncoder):
+    """`json.JSONEncoder` that dumps `Decimal`s as `float`s."""
+
+    def default(self, obj: Any) -> Any:
+        """Get serializable object for `o`.
+
+        Args:
+            obj: Object to serialize.
+
+        Returns:
+            `obj` converted to `float` if `o` is a `Decimals`, else the base class
+            `default()` method.
+        """
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super().default(obj)
+
+
+def replace_decimals_with_floats(obj: Any) -> Any:
+    """Convert all instances in `obj` of `Decimal` to `float`.
 
     Args:
         obj: A `List` or `Dict` object.
-        round_digits: A int value to set the rounding precision of Decimal values.
 
-    Returns: An object with all matching values and `float` types replaced by `Decimal`s rounded to `round_digits` decimal places.
-
+    Returns:
+        Input `obj` with all `Decimal` types replaced by `float`s.
     """
-    if isinstance(obj, list):
-        for i in range(len(obj)):
-            obj[i] = replace_floats_with_decimals(obj[i], round_digits)
-        return obj
-    elif isinstance(obj, dict):
-        for j in obj:
-            obj[j] = replace_floats_with_decimals(obj[j], round_digits)
-        return obj
-    elif isinstance(obj, float) or isinstance(obj, Decimal):
-        return round(Decimal(obj), round_digits)
-    else:
-        return obj
+    return json.loads(json.dumps(obj, cls=DecimalEncoder))
 
 
 def _lock_store_is_redis_lock_store(
     lock_store: Union[EndpointConfig, LockStore, None]
 ) -> bool:
-    # determine whether `lock_store` is associated with a `RedisLockStore`
+    if isinstance(lock_store, RedisLockStore):
+        return True
+
     if isinstance(lock_store, LockStore):
-        if isinstance(lock_store, RedisLockStore):
-            return True
         return False
 
     # `lock_store` is `None` or `EndpointConfig`

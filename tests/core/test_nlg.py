@@ -1,13 +1,10 @@
-import asyncio
 import uuid
 from typing import Text, Any
 
 import jsonschema
 import pytest
-from flask import Flask, request, jsonify
-from pytest_localserver.http import WSGIServer
+from sanic import Sanic, response
 
-import rasa.utils.io
 from rasa.core.nlg.callback import (
     nlg_request_format_spec,
     CallbackNaturalLanguageGenerator,
@@ -19,10 +16,11 @@ from tests.core.conftest import DEFAULT_ENDPOINTS_FILE
 
 
 def nlg_app(base_url="/"):
-    app = Flask(__name__)
+
+    app = Sanic(__name__)
 
     @app.route(base_url, methods=["POST"])
-    def generate():
+    async def generate(request):
         """Simple HTTP NLG generator, checks that the incoming request
         is format according to the spec."""
 
@@ -31,28 +29,24 @@ def nlg_app(base_url="/"):
         jsonschema.validate(nlg_call, nlg_request_format_spec())
 
         if nlg_call.get("template") == "utter_greet":
-            response = {"text": "Hey there!"}
+            response_dict = {"text": "Hey there!"}
         else:
-            response = {"text": "Sorry, didn't get that."}
-        return jsonify(response)
+            response_dict = {"text": "Sorry, didn't get that."}
+        return response.json(response_dict)
 
     return app
 
 
 # noinspection PyShadowingNames
-@pytest.fixture(scope="module")
-def http_nlg(request):
-    http_server = WSGIServer(application=nlg_app())
-    http_server.start()
-
-    request.addfinalizer(http_server.stop)
-    return http_server.url
+@pytest.fixture()
+def http_nlg(loop, sanic_client):
+    return loop.run_until_complete(sanic_client(nlg_app()))
 
 
 async def test_nlg(http_nlg, trained_rasa_model):
     sender = str(uuid.uuid1())
 
-    nlg_endpoint = EndpointConfig.from_dict({"url": http_nlg})
+    nlg_endpoint = EndpointConfig.from_dict({"url": http_nlg.make_url("/")})
     agent = Agent.load(trained_rasa_model, None, generator=nlg_endpoint)
 
     response = await agent.handle_text("/greet", sender_id=sender)
@@ -78,6 +72,11 @@ def test_nlg_schema_validation_empty_buttons():
 
 def test_nlg_schema_validation_empty_image():
     content = {"text": "Hey there!", "image": None}
+    assert CallbackNaturalLanguageGenerator.validate_response(content)
+
+
+def test_nlg_schema_validation_empty_custom_dict():
+    content = {"custom": {}}
     assert CallbackNaturalLanguageGenerator.validate_response(content)
 
 
@@ -144,6 +143,9 @@ def test_nlg_fill_template_custom(slot_name: Text, slot_value: Any):
         "custom": {
             "field": f"{{{slot_name}}}",
             "properties": {"field_prefixed": f"prefix_{{{slot_name}}}"},
+            "bool_field": True,
+            "int_field:": 42,
+            "empty_field": None,
         }
     }
     t = TemplatedNaturalLanguageGenerator(templates=dict())
@@ -152,7 +154,10 @@ def test_nlg_fill_template_custom(slot_name: Text, slot_value: Any):
     assert result == {
         "custom": {
             "field": str(slot_value),
-            "properties": {"field_prefixed": f"prefix_{str(slot_value)}"},
+            "properties": {"field_prefixed": f"prefix_{slot_value}"},
+            "bool_field": True,
+            "int_field:": 42,
+            "empty_field": None,
         }
     }
 
@@ -266,15 +271,29 @@ def test_nlg_fill_template_attachment(attach_slot_name, attach_slot_value):
 
 
 @pytest.mark.parametrize(
-    "button_slot_name, button_slot_value", [("button_1", "button1")]
+    "button_slot_name, button_slot_value", [("button_1", "button_1")]
 )
 def test_nlg_fill_template_button(button_slot_name, button_slot_value):
-    template = {"button": f"{{{button_slot_name}}}"}
+    template = {
+        "buttons": [
+            {
+                "payload": f'/choose{{{{"some_slot": "{{{button_slot_name}}}"}}}}',
+                "title": f"{{{button_slot_name}}}",
+            }
+        ]
+    }
     t = TemplatedNaturalLanguageGenerator(templates=dict())
     result = t._fill_template(
         template=template, filled_slots={button_slot_name: button_slot_value}
     )
-    assert result == {"button": str(button_slot_value)}
+    assert result == {
+        "buttons": [
+            {
+                "payload": f'/choose{{"some_slot": "{button_slot_value}"}}',
+                "title": f"{button_slot_value}",
+            }
+        ]
+    }
 
 
 @pytest.mark.parametrize(

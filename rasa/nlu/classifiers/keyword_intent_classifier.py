@@ -1,35 +1,29 @@
 import os
 import logging
-import typing
 import re
 from typing import Any, Dict, Optional, Text
 
-from rasa.constants import DOCS_URL_COMPONENTS
+from rasa.shared.constants import DOCS_URL_COMPONENTS
 from rasa.nlu import utils
-from rasa.nlu.components import Component
-from rasa.nlu.training_data import Message
-from rasa.nlu.constants import INTENT_ATTRIBUTE
-from rasa.utils.common import raise_warning
+from rasa.nlu.classifiers.classifier import IntentClassifier
+from rasa.shared.nlu.constants import INTENT, TEXT
+import rasa.shared.utils.io
+from rasa.nlu.config import RasaNLUModelConfig
+from rasa.shared.nlu.training_data.training_data import TrainingData
+from rasa.shared.nlu.training_data.message import Message
+from rasa.nlu.model import Metadata
 
 logger = logging.getLogger(__name__)
 
-if typing.TYPE_CHECKING:
-    from rasa.nlu.config import RasaNLUModelConfig
-    from rasa.nlu.training_data import TrainingData
-    from rasa.nlu.model import Metadata
-    from rasa.nlu.training_data import Message
 
-
-class KeywordIntentClassifier(Component):
+class KeywordIntentClassifier(IntentClassifier):
     """Intent classifier using simple keyword matching.
 
 
     The classifier takes a list of keywords and associated intents as an input.
-    A input sentence is checked for the keywords and the intent is returned.
+    An input sentence is checked for the keywords and the intent is returned.
 
     """
-
-    provides = [INTENT_ATTRIBUTE]
 
     defaults = {"case_sensitive": True}
 
@@ -37,7 +31,7 @@ class KeywordIntentClassifier(Component):
         self,
         component_config: Optional[Dict[Text, Any]] = None,
         intent_keyword_map: Optional[Dict] = None,
-    ):
+    ) -> None:
 
         super(KeywordIntentClassifier, self).__init__(component_config)
 
@@ -46,28 +40,28 @@ class KeywordIntentClassifier(Component):
 
     def train(
         self,
-        training_data: "TrainingData",
-        cfg: Optional["RasaNLUModelConfig"] = None,
+        training_data: TrainingData,
+        config: Optional[RasaNLUModelConfig] = None,
         **kwargs: Any,
     ) -> None:
 
         duplicate_examples = set()
-        for ex in training_data.training_examples:
+        for ex in training_data.intent_examples:
             if (
-                ex.text in self.intent_keyword_map.keys()
-                and ex.get(INTENT_ATTRIBUTE) != self.intent_keyword_map[ex.text]
+                ex.get(TEXT) in self.intent_keyword_map.keys()
+                and ex.get(INTENT) != self.intent_keyword_map[ex.get(TEXT)]
             ):
-                duplicate_examples.add(ex.text)
-                raise_warning(
-                    f"Keyword '{ex.text}' is a keyword to trigger intent "
-                    f"'{self.intent_keyword_map[ex.text]}' and also "
-                    f"intent '{ex.get(INTENT_ATTRIBUTE)}', it will be removed "
+                duplicate_examples.add(ex.get(TEXT))
+                rasa.shared.utils.io.raise_warning(
+                    f"Keyword '{ex.get(TEXT)}' is a keyword to trigger intent "
+                    f"'{self.intent_keyword_map[ex.get(TEXT)]}' and also "
+                    f"intent '{ex.get(INTENT)}', it will be removed "
                     f"from the list of keywords for both of them. "
                     f"Remove (one of) the duplicates from the training data.",
                     docs=DOCS_URL_COMPONENTS + "#keyword-intent-classifier",
                 )
             else:
-                self.intent_keyword_map[ex.text] = ex.get(INTENT_ATTRIBUTE)
+                self.intent_keyword_map[ex.get(TEXT)] = ex.get(INTENT)
         for keyword in duplicate_examples:
             self.intent_keyword_map.pop(keyword)
             logger.debug(
@@ -88,7 +82,7 @@ class KeywordIntentClassifier(Component):
                     and intent1 != intent2
                 ):
                     ambiguous_mappings.append((intent1, keyword1))
-                    raise_warning(
+                    rasa.shared.utils.io.raise_warning(
                         f"Keyword '{keyword1}' is a keyword of intent '{intent1}', "
                         f"but also a substring of '{keyword2}', which is a "
                         f"keyword of intent '{intent2}."
@@ -105,13 +99,13 @@ class KeywordIntentClassifier(Component):
             )
 
     def process(self, message: Message, **kwargs: Any) -> None:
-        intent_name = self._map_keyword_to_intent(message.text)
+        intent_name = self._map_keyword_to_intent(message.get(TEXT))
 
         confidence = 0.0 if intent_name is None else 1.0
         intent = {"name": intent_name, "confidence": confidence}
 
-        if message.get(INTENT_ATTRIBUTE) is None or intent is not None:
-            message.set(INTENT_ATTRIBUTE, intent, add_to_output=True)
+        if message.get(INTENT) is None or intent is not None:
+            message.set(INTENT, intent, add_to_output=True)
 
     def _map_keyword_to_intent(self, text: Text) -> Optional[Text]:
         re_flag = 0 if self.case_sensitive else re.IGNORECASE
@@ -144,7 +138,7 @@ class KeywordIntentClassifier(Component):
         cls,
         meta: Dict[Text, Any],
         model_dir: Optional[Text] = None,
-        model_metadata: "Metadata" = None,
+        model_metadata: Metadata = None,
         cached_component: Optional["KeywordIntentClassifier"] = None,
         **kwargs: Any,
     ) -> "KeywordIntentClassifier":
@@ -153,11 +147,11 @@ class KeywordIntentClassifier(Component):
             file_name = meta.get("file")
             keyword_file = os.path.join(model_dir, file_name)
             if os.path.exists(keyword_file):
-                intent_keyword_map = utils.read_json_file(keyword_file)
+                intent_keyword_map = rasa.shared.utils.io.read_json_file(keyword_file)
             else:
-                raise_warning(
+                rasa.shared.utils.io.raise_warning(
                     f"Failed to load key word file for `IntentKeywordClassifier`, "
-                    f"maybe {keyword_file} does not exist?",
+                    f"maybe {keyword_file} does not exist?"
                 )
                 intent_keyword_map = None
             return cls(meta, intent_keyword_map)

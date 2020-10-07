@@ -4,42 +4,55 @@ import re
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Text
 
 from rasa.core.channels.channel import InputChannel, OutputChannel, UserMessage
-from rasa.utils.common import raise_warning
+import rasa.shared.utils.io
 from sanic import Blueprint, response
 from sanic.request import Request
 from sanic.response import HTTPResponse
-from slackclient import SlackClient
+from slack import WebClient
 
 logger = logging.getLogger(__name__)
 
 
-class SlackBot(SlackClient, OutputChannel):
+class SlackBot(OutputChannel):
     """A Slack communication channel"""
 
     @classmethod
     def name(cls) -> Text:
         return "slack"
 
-    def __init__(self, token: Text, slack_channel: Optional[Text] = None) -> None:
+    def __init__(
+        self,
+        token: Text,
+        slack_channel: Optional[Text] = None,
+        thread_id: Optional[Text] = None,
+        proxy: Optional[Text] = None,
+    ) -> None:
 
         self.slack_channel = slack_channel
-        super().__init__(token)
+        self.thread_id = thread_id
+        self.proxy = proxy
+        self.client = WebClient(token, run_async=True, proxy=proxy)
+        super().__init__()
 
     @staticmethod
     def _get_text_from_slack_buttons(buttons: List[Dict]) -> Text:
         return "".join([b.get("title", "") for b in buttons])
 
+    async def _post_message(self, channel, **kwargs: Any):
+        if self.thread_id:
+            await self.client.chat_postMessage(
+                channel=channel, **kwargs, thread_ts=self.thread_id
+            )
+        else:
+            await self.client.chat_postMessage(channel=channel, **kwargs)
+
     async def send_text_message(
         self, recipient_id: Text, text: Text, **kwargs: Any
     ) -> None:
         recipient = self.slack_channel or recipient_id
-        for message_part in text.split("\n\n"):
-            super().api_call(
-                "chat.postMessage",
-                channel=recipient,
-                as_user=True,
-                text=message_part,
-                type="mrkdwn",
+        for message_part in text.strip().split("\n\n"):
+            await self._post_message(
+                channel=recipient, as_user=True, text=message_part, type="mrkdwn"
             )
 
     async def send_image_url(
@@ -47,24 +60,17 @@ class SlackBot(SlackClient, OutputChannel):
     ) -> None:
         recipient = self.slack_channel or recipient_id
         image_block = {"type": "image", "image_url": image, "alt_text": image}
-        return super().api_call(
-            "chat.postMessage",
-            channel=recipient,
-            as_user=True,
-            text=image,
-            blocks=[image_block],
+
+        await self._post_message(
+            channel=recipient, as_user=True, text=image, blocks=[image_block]
         )
 
     async def send_attachment(
         self, recipient_id: Text, attachment: Dict[Text, Any], **kwargs: Any
     ) -> None:
         recipient = self.slack_channel or recipient_id
-        return super().api_call(
-            "chat.postMessage",
-            channel=recipient,
-            as_user=True,
-            attachments=[attachment],
-            **kwargs,
+        await self._post_message(
+            channel=recipient, as_user=True, attachments=[attachment], **kwargs
         )
 
     async def send_text_with_buttons(
@@ -79,7 +85,7 @@ class SlackBot(SlackClient, OutputChannel):
         text_block = {"type": "section", "text": {"type": "plain_text", "text": text}}
 
         if len(buttons) > 5:
-            raise_warning(
+            rasa.shared.utils.io.raise_warning(
                 "Slack API currently allows only up to 5 buttons. "
                 "Since you added more than 5, slack will ignore all of them."
             )
@@ -94,8 +100,8 @@ class SlackBot(SlackClient, OutputChannel):
                     "value": button["payload"],
                 }
             )
-        super().api_call(
-            "chat.postMessage",
+
+        await self._post_message(
             channel=recipient,
             as_user=True,
             text=text,
@@ -105,9 +111,9 @@ class SlackBot(SlackClient, OutputChannel):
     async def send_custom_json(
         self, recipient_id: Text, json_message: Dict[Text, Any], **kwargs: Any
     ) -> None:
-        json_message.setdefault("channel", self.slack_channel or recipient_id)
+        channel = json_message.get("channel", self.slack_channel or recipient_id)
         json_message.setdefault("as_user", True)
-        return super().api_call("chat.postMessage", **json_message)
+        await self._post_message(channel=channel, **json_message)
 
 
 class SlackInput(InputChannel):
@@ -126,9 +132,11 @@ class SlackInput(InputChannel):
         return cls(
             credentials.get("slack_token"),
             credentials.get("slack_channel"),
+            credentials.get("proxy"),
             credentials.get("slack_retry_reason_header", "x-slack-retry-reason"),
             credentials.get("slack_retry_number_header", "x-slack-retry-num"),
             credentials.get("errors_ignore_retry", None),
+            credentials.get("use_threads", False),
         )
         # pytype: enable=attribute-error
 
@@ -136,9 +144,11 @@ class SlackInput(InputChannel):
         self,
         slack_token: Text,
         slack_channel: Optional[Text] = None,
+        proxy: Optional[Text] = None,
         slack_retry_reason_header: Optional[Text] = None,
         slack_retry_number_header: Optional[Text] = None,
         errors_ignore_retry: Optional[List[Text]] = None,
+        use_threads: Optional[bool] = False,
     ) -> None:
         """Create a Slack input channel.
 
@@ -155,19 +165,38 @@ class SlackInput(InputChannel):
                 the bot posts, or channel name (e.g. '#bot-test')
                 If not set, messages will be sent back
                 to the "App" DM channel of your bot's name.
+            proxy: A Proxy Server to route your traffic through
             slack_retry_reason_header: Slack HTTP header name indicating reason that slack send retry request.
             slack_retry_number_header: Slack HTTP header name indicating the attempt number
             errors_ignore_retry: Any error codes given by Slack
                 included in this list will be ignored.
                 Error codes are listed
                 `here <https://api.slack.com/events-api#errors>`_.
+            use_threads: If set to True, your bot will send responses in Slack as a threaded message.
+                Responses will appear as a normal Slack message if set to False.
 
         """
         self.slack_token = slack_token
         self.slack_channel = slack_channel
+        self.proxy = proxy
         self.errors_ignore_retry = errors_ignore_retry or ("http_timeout",)
         self.retry_reason_header = slack_retry_reason_header
         self.retry_num_header = slack_retry_number_header
+        self.use_threads = use_threads
+
+    @staticmethod
+    def _is_app_mention(slack_event: Dict) -> bool:
+        try:
+            return slack_event["event"]["type"] == "app_mention"
+        except KeyError:
+            return False
+
+    @staticmethod
+    def _is_direct_message(slack_event: Dict) -> bool:
+        try:
+            return slack_event["event"]["channel_type"] == "im"
+        except KeyError:
+            return False
 
     @staticmethod
     def _is_user_message(slack_event: Dict) -> bool:
@@ -293,11 +322,20 @@ class SlackInput(InputChannel):
 
             return response.text(None, status=201, headers={"X-Slack-No-Retry": 1})
 
+        if metadata is not None:
+            output_channel = metadata.get("out_channel")
+            if self.use_threads:
+                thread_id = metadata.get("thread_id")
+            else:
+                thread_id = None
+        else:
+            output_channel = None
+            thread_id = None
+
         try:
-            out_channel = self.get_output_channel()
             user_msg = UserMessage(
                 text,
-                out_channel,
+                self.get_output_channel(output_channel, thread_id),
                 sender_id,
                 input_channel=self.name(),
                 metadata=metadata,
@@ -310,6 +348,45 @@ class SlackInput(InputChannel):
 
         return response.text("")
 
+    def get_metadata(self, request: Request) -> Dict[Text, Any]:
+        """Extracts the metadata from a slack API event (https://api.slack.com/types/event).
+
+        Args:
+            request: A `Request` object that contains a slack API event in the body.
+
+        Returns:
+            Metadata extracted from the sent event payload. This includes the output channel for the response,
+            and users that have installed the bot.
+        """
+        content_type = request.headers.get("content-type")
+
+        # Slack API sends either a JSON-encoded or a URL-encoded body depending on the content
+        if content_type == "application/json":
+            # if JSON-encoded message is received
+            slack_event = request.json
+            event = slack_event.get("event", {})
+            thread_id = event.get("thread_ts", event.get("ts"))
+
+            return {
+                "out_channel": event.get("channel"),
+                "thread_id": thread_id,
+                "users": slack_event.get("authed_users"),
+            }
+
+        if content_type == "application/x-www-form-urlencoded":
+            # if URL-encoded message is received
+            output = request.form
+            payload = json.loads(output["payload"][0])
+            message = payload.get("message", {})
+            thread_id = message.get("thread_ts", message.get("ts"))
+            return {
+                "out_channel": payload.get("channel", {}).get("id"),
+                "thread_id": thread_id,
+                "users": payload.get("user", {}).get("id"),
+            }
+
+        return {}
+
     def blueprint(
         self, on_new_message: Callable[[UserMessage], Awaitable[Any]]
     ) -> Blueprint:
@@ -321,7 +398,39 @@ class SlackInput(InputChannel):
 
         @slack_webhook.route("/webhook", methods=["GET", "POST"])
         async def webhook(request: Request) -> HTTPResponse:
-            if request.form:
+            content_type = request.headers.get("content-type")
+            # Slack API sends either a JSON-encoded or a URL-encoded body depending on the content
+
+            if content_type == "application/json":
+                # if JSON-encoded message is received
+                output = request.json
+                event = output.get("event", {})
+                user_message = event.get("text", "")
+                sender_id = event.get("user", "")
+                metadata = self.get_metadata(request)
+
+                if "challenge" in output:
+                    return response.json(output.get("challenge"))
+
+                elif self._is_user_message(output) and self._is_supported_channel(
+                    output, metadata
+                ):
+                    return await self.process_message(
+                        request,
+                        on_new_message,
+                        text=self._sanitize_user_message(
+                            user_message, metadata["users"]
+                        ),
+                        sender_id=sender_id,
+                        metadata=metadata,
+                    )
+                else:
+                    logger.warning(
+                        f"Received message on unsupported channel: {metadata['out_channel']}"
+                    )
+
+            elif content_type == "application/x-www-form-urlencoded":
+                # if URL-encoded message is received
                 output = request.form
                 payload = json.loads(output["payload"][0])
 
@@ -333,33 +442,29 @@ class SlackInput(InputChannel):
                         return await self.process_message(
                             request, on_new_message, text, sender_id, metadata
                         )
-                    elif payload["actions"][0]["type"] == "button":
+                    if payload["actions"][0]["type"] == "button":
                         # link buttons don't have "value", don't send their clicks to bot
                         return response.text("User clicked link button")
                 return response.text(
                     "The input message could not be processed.", status=500
                 )
 
-            elif request.json:
-                output = request.json
-                if "challenge" in output:
-                    return response.json(output.get("challenge"))
-
-                elif self._is_user_message(output):
-                    metadata = self.get_metadata(request)
-                    return await self.process_message(
-                        request,
-                        on_new_message,
-                        self._sanitize_user_message(
-                            output["event"]["text"], output["authed_users"]
-                        ),
-                        output.get("event").get("user"),
-                        metadata,
-                    )
-
-            return response.text("Bot message delivered")
+            return response.text("Bot message delivered.")
 
         return slack_webhook
 
-    def get_output_channel(self) -> OutputChannel:
-        return SlackBot(self.slack_token, self.slack_channel)
+    def _is_supported_channel(self, slack_event: Dict, metadata: Dict) -> bool:
+        return (
+            self._is_direct_message(slack_event)
+            or self._is_app_mention(slack_event)
+            or metadata["out_channel"] == self.slack_channel
+        )
+
+    def get_output_channel(
+        self, channel: Optional[Text] = None, thread_id: Optional[Text] = None
+    ) -> OutputChannel:
+        channel = channel or self.slack_channel
+        return SlackBot(self.slack_token, channel, thread_id, self.proxy)
+
+    def set_output_channel(self, channel: Text) -> None:
+        self.slack_channel = channel

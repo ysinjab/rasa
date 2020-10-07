@@ -2,18 +2,19 @@ language: en
 
 pipeline:
   - name: WhitespaceTokenizer
-  - name: CRFEntityExtractor
-  - name: EntitySynonymMapper
+  - name: LexicalSyntacticFeaturizer
   - name: CountVectorsFeaturizer
     token_pattern: (?u)\b\w+\b
-  - name: EmbeddingIntentClassifier
-  - name: DucklingHTTPExtractor
+  - name: DucklingEntityExtractor
     url: http://localhost:8000
     dimensions:
       - number
+  - name: DIETClassifier
+    epochs: 100
+  - name: EntitySynonymMapper
 
 policies:
-  - name: FallbackPolicy
-  - name: MemoizationPolicy
-  - name: FormPolicy
-  - name: MappingPolicy
+  - name: TEDPolicy
+    epochs: 100
+  - name: AugmentedMemoizationPolicy
+  - name: RulePolicy
