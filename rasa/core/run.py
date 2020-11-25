@@ -6,14 +6,19 @@ import shutil
 from functools import partial
 from typing import Any, List, Optional, Text, Union
 
+import questionary
+
 import rasa.core.utils
-from rasa.shared.exceptions import RasaException
+from rasa.shared.exceptions import FileNotFoundException, RasaException
 import rasa.shared.utils.common
 import rasa.utils
 import rasa.utils.common
+from rasa.utils.endpoints import EndpointConfig
+import rasa.core.channels.bridge
 import rasa.utils.io
+import rasa.shared.utils.cli
 from rasa import model, server, telemetry
-from rasa.constants import ENV_SANIC_BACKLOG
+from rasa.constants import ENV_SANIC_BACKLOG, DEFAULT_SERVER_HOST
 from rasa.core import agent, channels, constants
 from rasa.core.agent import Agent
 from rasa.core.brokers.broker import EventBroker
@@ -95,6 +100,7 @@ def configure_app(
     endpoints: Optional[AvailableEndpoints] = None,
     log_file: Optional[Text] = None,
     conversation_id: Optional[Text] = uuid.uuid4().hex,
+    bridge: bool = False,
 ):
     """Run the agent."""
 
@@ -143,7 +149,76 @@ def configure_app(
 
         app.add_task(run_cmdline_io)
 
+    if bridge:
+        if not endpoints or not endpoints.bridge:
+            bridge_endpoint = setup_rasa_bridge()
+        else:
+            bridge_endpoint = endpoints.bridge
+
+        async def run_bridge_io(running_app: Sanic):
+            """Small wrapper to shut down the server once cmd io is done."""
+            await asyncio.sleep(1)  # allow server to start
+
+            access_token = rasa.core.channels.bridge.retrieve_access_token()
+            webhook = rasa.core.channels.bridge.webhook_from_endpoint(bridge_endpoint)
+            await rasa.core.channels.bridge.retrieve_webhook_calls(
+                access_token, webhook, running_app, f"{DEFAULT_SERVER_HOST}:{port}"
+            )
+
+        app.add_task(run_bridge_io)
+
     return app
+
+
+def setup_rasa_bridge():
+    from rasa.core.channels import bridge
+    from nacl.encoding import Base64Encoder
+
+    confirm = questionary.confirm(
+        "Couldn't find a Rasa Bridge configuration yet, do you want to set it up?"
+    ).ask()
+    if not confirm:
+        rasa.shared.utils.cli.print_error_and_exit(
+            "Can't use Rasa Bridge without a configuration. Please either run "
+            "without the bridge or configure it before running the server."
+        )
+
+    webhook = bridge.create_webhook()
+
+    secret = webhook.encryption_key.encode(Base64Encoder).decode("utf-8")
+
+    rasa.shared.utils.cli.print_success("Successfully created a Rasa Bridge.")
+    should_add = questionary.confirm(
+        "The Rasa Bridge configuration needs to be "
+        "added to your endpoints.yml - Continue?"
+    ).ask()
+
+    if not should_add:
+        rasa.shared.utils.cli.print_success(
+            f"Use the following configuration to enable it in "
+            f"your endpoints.yml:\n"
+            f"bridge:\n"
+            f"  token: {webhook.token}\n"
+            f"  secret: {secret}"
+        )
+        rasa.shared.utils.cli.print_error_and_exit(
+            "Please configure the bridge manually and restart the server."
+        )
+
+    rasa.shared.utils.cli.print_success(
+        f"You can use {bridge.url_for_webhook(webhook)} to configure "
+        f"your channels webhook."
+    )
+
+    # TODO: this is just a hack - won't necessarily end up in the endpoints.yml
+    endpoints_path = "endpoints.yml"
+    try:
+        endpoints = rasa.shared.utils.io.read_yaml_file(endpoints_path)
+    except FileNotFoundException:
+        endpoints = {}
+    endpoints["bridge"] = {"token": webhook.token, "secret": secret}
+    rasa.shared.utils.io.write_yaml(endpoints, endpoints_path)
+    return EndpointConfig(token=webhook.token, secret=secret)
 
 
 def serve_application(
@@ -165,6 +240,7 @@ def serve_application(
     ssl_ca_file: Optional[Text] = None,
     ssl_password: Optional[Text] = None,
     conversation_id: Optional[Text] = uuid.uuid4().hex,
+    bridge: bool = False,
 ):
     """Run the API entrypoint."""
 
@@ -185,6 +261,7 @@ def serve_application(
         endpoints=endpoints,
         log_file=log_file,
         conversation_id=conversation_id,
+        bridge=bridge,
     )
 
     ssl_context = server.create_ssl_context(
@@ -219,7 +296,7 @@ def serve_application(
 
     rasa.utils.common.update_sanic_log_level(log_file)
     app.run(
-        host="0.0.0.0",
+        host=DEFAULT_SERVER_HOST,
         port=port,
         ssl=ssl_context,
         backlog=int(os.environ.get(ENV_SANIC_BACKLOG, "100")),

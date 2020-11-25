@@ -106,6 +106,10 @@ def add_server_arguments(parser: argparse.ArgumentParser):
         "--connector", type=str, help="Service to connect to."
     )
 
+    channel_arguments.add_argument(
+        "--bridge", action="store_true", help="Use Rasa Bridge."
+    )
+
     jwt_auth = parser.add_argument_group("JWT Authentication")
     jwt_auth.add_argument(
         "--jwt-secret",
