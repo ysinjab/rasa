@@ -1,13 +1,9 @@
-import datetime
-
 import tensorflow as tf
 import tensorflow_addons as tfa
 import numpy as np
 import logging
 import os
-import shutil
 from collections import defaultdict
-from pathlib import Path
 from typing import (
     List,
     Text,
@@ -15,14 +11,11 @@ from typing import (
     Tuple,
     Union,
     Optional,
-    Callable,
     TYPE_CHECKING,
     Any,
 )
 
-from tqdm import tqdm
 from rasa.constants import CHECKPOINT_MODEL_NAME
-from rasa.shared.utils.io import is_logging_disabled
 import rasa.utils.io
 from rasa.utils.tensorflow.model_data import RasaModelData, FeatureSignature
 from rasa.utils.tensorflow.constants import (
@@ -55,14 +48,9 @@ from rasa.utils.tensorflow.constants import (
     CONCAT_DIMENSION,
     DROP_RATE_ATTENTION,
     SCALE_LOSS,
-    EPOCHS,
 )
 from rasa.utils.tensorflow import layers
 from rasa.utils.tensorflow.transformer import TransformerEncoder
-from utils.tensorflow.callback import RasaModelCheckpoint, RasaTrainingLogger
-
-if TYPE_CHECKING:
-    from tensorflow.python.ops.summary_ops_v2 import ResourceSummaryWriter
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +88,9 @@ class RasaModel(tf.keras.models.Model):
         self._predict_function = None
 
         self.random_seed = random_seed
+
+        tf.random.set_seed(self.random_seed)
+        np.random.seed(self.random_seed)
 
         self.tensorboard_log_dir = tensorboard_log_dir
         self.tensorboard_log_level = tensorboard_log_level
@@ -276,7 +267,9 @@ class RasaModel(tf.keras.models.Model):
         return batch_data
 
     def call(self, inputs, training=None, mask=None):
-        pass
+        raise Exception(
+            "This method should neither be called nor implemented in our code."
+        )
 
 
 # noinspection PyMethodOverriding

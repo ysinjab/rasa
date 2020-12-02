@@ -819,7 +819,9 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
             verbose=False,
         )
 
-    def _create_data_generators(self, model_data: RasaModelData):
+    def _create_data_generators(
+        self, model_data: RasaModelData
+    ) -> Tuple[IncreasingBatchSizeDataGenerator, IncreasingBatchSizeDataGenerator]:
         validation_data_generator = None
         if self.component_config[EVAL_NUM_EXAMPLES] > 0:
             model_data, evaluation_model_data = model_data.split(
@@ -833,6 +835,7 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
                 batch_strategy=self.component_config[BATCH_STRATEGY],
                 shuffle=True,
             )
+
         data_generator = IncreasingBatchSizeDataGenerator(
             model_data,
             batch_size=self.component_config[BATCH_SIZES],
@@ -840,10 +843,12 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
             batch_strategy=self.component_config[BATCH_STRATEGY],
             shuffle=True,
         )
+
         return data_generator, validation_data_generator
 
     def _create_callbacks(self) -> List[tf.keras.callbacks.Callback]:
-        callbacks = []
+        callbacks = [RasaTrainingLogger(self.component_config[EPOCHS], silent=False)]
+
         if self.component_config[TENSORBOARD_LOG_DIR]:
             callbacks.append(
                 tf.keras.callbacks.TensorBoard(
@@ -854,10 +859,9 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
                     histogram_freq=10,
                 )
             )
+
         if self.component_config[CHECKPOINT_MODEL]:
             callbacks.append(RasaModelCheckpoint(Path(self.tmp_checkpoint_dir)))
-
-        callbacks.append(RasaTrainingLogger(self.component_config[EPOCHS], False))
 
         return callbacks
 

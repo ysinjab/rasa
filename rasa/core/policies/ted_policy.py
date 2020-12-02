@@ -509,7 +509,9 @@ class TEDPolicy(Policy):
             verbose=False,
         )
 
-    def _create_data_generators(self, model_data: RasaModelData):
+    def _create_data_generators(
+        self, model_data: RasaModelData
+    ) -> Tuple[IncreasingBatchSizeDataGenerator, IncreasingBatchSizeDataGenerator]:
         validation_data_generator = None
         if self.config[EVAL_NUM_EXAMPLES] > 0:
             model_data, evaluation_model_data = model_data.split(
@@ -532,7 +534,8 @@ class TEDPolicy(Policy):
         return data_generator, validation_data_generator
 
     def _create_callbacks(self) -> List[tf.keras.callbacks.Callback]:
-        callbacks = []
+        callbacks = [RasaTrainingLogger(self.config[EPOCHS], silent=False)]
+
         if self.config[TENSORBOARD_LOG_DIR]:
             callbacks.append(
                 tf.keras.callbacks.TensorBoard(
@@ -543,10 +546,9 @@ class TEDPolicy(Policy):
                     histogram_freq=10,
                 )
             )
+
         if self.config[CHECKPOINT_MODEL]:
             callbacks.append(RasaModelCheckpoint(Path(self.tmp_checkpoint_dir)))
-
-        callbacks.append(RasaTrainingLogger(self.config[EPOCHS], False))
 
         return callbacks
 
@@ -620,7 +622,8 @@ class TEDPolicy(Policy):
         )
         model_data = self._create_model_data(tracker_state_features)
 
-        output = self.model.predict(model_data)
+        dataset = model_data.as_tf_dataset(1)
+        output = self.model.predict(dataset)
         # take the last prediction in the sequence
         similarities = output["similarities"].numpy()[:, -1, :]
         confidences = output["action_scores"].numpy()[:, -1, :]
