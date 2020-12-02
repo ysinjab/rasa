@@ -1,5 +1,6 @@
 import copy
 import logging
+import shutil
 from pathlib import Path
 from collections import defaultdict
 
@@ -97,7 +98,8 @@ from rasa.utils.tensorflow.constants import (
     FEATURIZERS,
     ENTITY_RECOGNITION,
 )
-
+from utils.tensorflow.callback import RasaModelCheckpoint, RasaTrainingLogger
+from utils.tensorflow.data_generator import DataGenerator
 
 if TYPE_CHECKING:
     from rasa.shared.nlu.training_data.features import Features
@@ -304,6 +306,8 @@ class TEDPolicy(Policy):
         self._label_data: Optional[RasaModelData] = None
         self.data_example: Optional[Dict[Text, List[np.ndarray]]] = None
 
+        self.tmp_checkpoint_dir = rasa.utils.io.create_temporary_directory()
+
     def _load_params(self, **kwargs: Dict[Text, Any]) -> None:
         self.config = copy.deepcopy(self.defaults)
         self.config.update(kwargs)
@@ -490,14 +494,60 @@ class TEDPolicy(Policy):
             self._entity_tag_specs,
         )
 
-        self.model.fit(
-            model_data,
-            self.config[EPOCHS],
-            self.config[BATCH_SIZES],
-            self.config[EVAL_NUM_EXAMPLES],
-            self.config[EVAL_NUM_EPOCHS],
-            batch_strategy=self.config[BATCH_STRATEGY],
+        data_generator, validation_data_generator = self._create_data_generators(
+            model_data
         )
+        callbacks = self._create_callbacks()
+
+        self.model.compile(run_eagerly=False)
+        self.model.fit(
+            data_generator,
+            epochs=self.config[EPOCHS],
+            validation_data=validation_data_generator,
+            callbacks=callbacks,
+            verbose=False,
+        )
+
+    def _create_data_generators(self, model_data: RasaModelData):
+        validation_data_generator = None
+        if self.config[EVAL_NUM_EXAMPLES] > 0:
+            model_data, evaluation_model_data = model_data.split(
+                self.config[EVAL_NUM_EXAMPLES], self.config[RANDOM_SEED],
+            )
+            validation_data_generator = DataGenerator(
+                evaluation_model_data,
+                batch_size=self.config[BATCH_SIZES],
+                epochs=self.config[EPOCHS],
+                batch_strategy=self.config[BATCH_STRATEGY],
+                shuffle=True,
+            )
+        data_generator = DataGenerator(
+            model_data,
+            batch_size=self.config[BATCH_SIZES],
+            epochs=self.config[EPOCHS],
+            batch_strategy=self.config[BATCH_STRATEGY],
+            shuffle=True,
+        )
+        return data_generator, validation_data_generator
+
+    def _create_callbacks(self) -> List[tf.keras.callbacks.Callback]:
+        callbacks = []
+        if self.config[TENSORBOARD_LOG_DIR]:
+            callbacks.append(
+                tf.keras.callbacks.TensorBoard(
+                    log_dir=self.config[TENSORBOARD_LOG_DIR],
+                    update_freq=self.config[TENSORBOARD_LOG_LEVEL],
+                    write_graph=True,
+                    write_images=True,
+                    histogram_freq=10,
+                )
+            )
+        if self.config[CHECKPOINT_MODEL]:
+            callbacks.append(RasaModelCheckpoint(Path(self.tmp_checkpoint_dir)))
+
+        callbacks.append(RasaTrainingLogger(self.config[EPOCHS], False))
+
+        return callbacks
 
     def _featurize_tracker_for_e2e(
         self,
@@ -600,9 +650,8 @@ class TEDPolicy(Policy):
         self.featurizer.persist(path)
 
         if self.model.checkpoint_model:
-            self.model.copy_best(str(tf_model_file))
-        else:
-            self.model.save(str(tf_model_file))
+            shutil.move(self.tmp_checkpoint_dir, model_path / "checkpoints")
+        self.model.save(str(tf_model_file))
 
         io_utils.json_pickle(
             model_path / f"{SAVE_MODEL_FILE_NAME}.priority.pkl", self.priority
@@ -1493,6 +1542,7 @@ class TED(TransformerRasaModel):
 
         losses = []
 
+        label_ids.set_shape((None, None, 1))
         loss, acc = self._tf_layers[f"loss.{LABEL}"](
             dialogue_embed,
             labels_embed,
@@ -1523,9 +1573,6 @@ class TED(TransformerRasaModel):
         return tf.math.add_n(losses)
 
     # ---PREDICTION---
-
-    def prepare_for_predict(self) -> None:
-        _, self.all_labels_embed = self._create_all_labels_embed()
 
     def batch_predict(
         self, batch_in: Union[Tuple[tf.Tensor], Tuple[np.ndarray]]

@@ -55,9 +55,11 @@ from rasa.utils.tensorflow.constants import (
     CONCAT_DIMENSION,
     DROP_RATE_ATTENTION,
     SCALE_LOSS,
+    EPOCHS,
 )
 from rasa.utils.tensorflow import layers
 from rasa.utils.tensorflow.transformer import TransformerEncoder
+from utils.tensorflow.callback import RasaModelCheckpoint, RasaTrainingLogger
 
 if TYPE_CHECKING:
     from tensorflow.python.ops.summary_ops_v2 import ResourceSummaryWriter
@@ -129,15 +131,6 @@ class RasaModel(tf.keras.models.Model):
             The loss of the given batch.
         """
         raise NotImplementedError
-
-    def prepare_for_predict(self) -> None:
-        """Prepares tf graph fpr prediction.
-
-        This method should contain necessary tf calculations
-        and set self variables that are used in `batch_predict`.
-        For example, pre calculation of `self.all_labels_embed`.
-        """
-        pass
 
     def batch_predict(
         self, batch_in: Union[Tuple[tf.Tensor], Tuple[np.ndarray]]

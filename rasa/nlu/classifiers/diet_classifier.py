@@ -804,28 +804,44 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
 
         self.model = self._instantiate_model_class(model_data)
 
-        evaluation_data_generator = None
+        data_generator, validation_data_generator = self._create_data_generators(
+            model_data
+        )
+        callbacks = self._create_callbacks()
+
+        self.model.compile(run_eagerly=False)
+        self.model.fit(
+            data_generator,
+            epochs=self.component_config[EPOCHS],
+            validation_data=validation_data_generator,
+            callbacks=callbacks,
+            verbose=False,
+        )
+
+    def _create_data_generators(self, model_data: RasaModelData):
+        validation_data_generator = None
         if self.component_config[EVAL_NUM_EXAMPLES] > 0:
             model_data, evaluation_model_data = model_data.split(
                 self.component_config[EVAL_NUM_EXAMPLES],
                 self.component_config[RANDOM_SEED],
             )
-            evaluation_data_generator = DataGenerator(
+            validation_data_generator = DataGenerator(
                 evaluation_model_data,
                 batch_size=self.component_config[BATCH_SIZES],
                 epochs=self.component_config[EPOCHS],
                 batch_strategy=self.component_config[BATCH_STRATEGY],
                 shuffle=True,
             )
-
-        generator = DataGenerator(
+        data_generator = DataGenerator(
             model_data,
             batch_size=self.component_config[BATCH_SIZES],
             epochs=self.component_config[EPOCHS],
             batch_strategy=self.component_config[BATCH_STRATEGY],
             shuffle=True,
         )
+        return data_generator, validation_data_generator
 
+    def _create_callbacks(self) -> List[tf.keras.callbacks.Callback]:
         callbacks = []
         if self.component_config[TENSORBOARD_LOG_DIR]:
             callbacks.append(
@@ -842,14 +858,7 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
 
         callbacks.append(RasaTrainingLogger(self.component_config[EPOCHS], False))
 
-        self.model.compile(run_eagerly=False)
-        self.model.fit(
-            generator,
-            epochs=self.component_config[EPOCHS],
-            validation_data=evaluation_data_generator,
-            callbacks=callbacks,
-            verbose=False,
-        )
+        return callbacks
 
     # process helpers
     def _predict(self, message: Message) -> Optional[Dict[Text, tf.Tensor]]:
@@ -998,7 +1007,8 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
 
         rasa.shared.utils.io.create_directory_for_file(tf_model_file)
 
-        shutil.move(self.tmp_checkpoint_dir, model_dir / "checkpoints")
+        if self.component_config[CHECKPOINT_MODEL]:
+            shutil.move(self.tmp_checkpoint_dir, model_dir / "checkpoints")
         self.model.save(str(tf_model_file))
 
         io_utils.pickle_dump(
@@ -1568,10 +1578,6 @@ class DIET(TransformerRasaModel):
         elif tag_name == ENTITY_ATTRIBUTE_ROLE:
             self.entity_role_loss.update_state(loss)
             self.entity_role_f1.update_state(f1)
-
-    def prepare_for_predict(self) -> None:
-        if self.config[INTENT_CLASSIFICATION]:
-            _, self.all_labels_embed = self._create_all_labels()
 
     def batch_predict(
         self, batch_in: Union[Tuple[tf.Tensor], Tuple[np.ndarray]]
