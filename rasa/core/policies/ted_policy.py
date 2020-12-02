@@ -504,6 +504,7 @@ class TEDPolicy(Policy):
             data_generator,
             epochs=self.config[EPOCHS],
             validation_data=validation_data_generator,
+            validation_freq=self.config[EVAL_NUM_EPOCHS],
             callbacks=callbacks,
             verbose=False,
         )

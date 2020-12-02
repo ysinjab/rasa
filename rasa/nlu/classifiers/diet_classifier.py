@@ -814,6 +814,7 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
             data_generator,
             epochs=self.component_config[EPOCHS],
             validation_data=validation_data_generator,
+            validation_freq=self.component_config[EVAL_NUM_EPOCHS],
             callbacks=callbacks,
             verbose=False,
         )
