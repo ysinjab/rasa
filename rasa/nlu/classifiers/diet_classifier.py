@@ -96,7 +96,7 @@ from rasa.utils.tensorflow.constants import (
     DENSE_DIMENSION,
     MASK,
 )
-from rasa.utils.tensorflow.data_generator import DataGenerator
+from rasa.utils.tensorflow.data_generator import IncreasingBatchSizeDataGenerator
 from utils.tensorflow.callback import RasaTrainingLogger, RasaModelCheckpoint
 
 logger = logging.getLogger(__name__)
@@ -825,14 +825,14 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
                 self.component_config[EVAL_NUM_EXAMPLES],
                 self.component_config[RANDOM_SEED],
             )
-            validation_data_generator = DataGenerator(
+            validation_data_generator = IncreasingBatchSizeDataGenerator(
                 evaluation_model_data,
                 batch_size=self.component_config[BATCH_SIZES],
                 epochs=self.component_config[EPOCHS],
                 batch_strategy=self.component_config[BATCH_STRATEGY],
                 shuffle=True,
             )
-        data_generator = DataGenerator(
+        data_generator = IncreasingBatchSizeDataGenerator(
             model_data,
             batch_size=self.component_config[BATCH_SIZES],
             epochs=self.component_config[EPOCHS],

@@ -188,7 +188,7 @@ def test_shuffle_session_data(model_data: RasaModelData):
         np.array(list(before.values())) == np.array(list(model_data.values()))
     )
 
-    data = model_data._shuffled_data(model_data.data)
+    data = model_data.shuffled_data(model_data.data)
 
     # check that original data didn't change
     assert np.all(
@@ -322,7 +322,7 @@ def test_is_in_4d_format(model_data: RasaModelData):
 
 
 def test_balance_model_data(model_data: RasaModelData):
-    data = model_data._balanced_data(model_data.data, 2, False)
+    data = model_data.balanced_data(model_data.data, 2, False)
 
     assert np.all(np.array(data["label"]["ids"][0]) == np.array([0, 1, 1, 0, 1]))
 
@@ -332,7 +332,7 @@ def test_not_balance_model_data(model_data: RasaModelData):
         label_key="entities", label_sub_key="tag_ids", data=model_data.data
     )
 
-    data = test_model_data._balanced_data(test_model_data.data, 2, False)
+    data = test_model_data.balanced_data(test_model_data.data, 2, False)
 
     assert np.all(
         data["entities"]["tag_ids"] == test_model_data.get("entities", "tag_ids")

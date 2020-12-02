@@ -99,7 +99,7 @@ from rasa.utils.tensorflow.constants import (
     ENTITY_RECOGNITION,
 )
 from utils.tensorflow.callback import RasaModelCheckpoint, RasaTrainingLogger
-from utils.tensorflow.data_generator import DataGenerator
+from utils.tensorflow.data_generator import IncreasingBatchSizeDataGenerator
 
 if TYPE_CHECKING:
     from rasa.shared.nlu.training_data.features import Features
@@ -514,14 +514,14 @@ class TEDPolicy(Policy):
             model_data, evaluation_model_data = model_data.split(
                 self.config[EVAL_NUM_EXAMPLES], self.config[RANDOM_SEED],
             )
-            validation_data_generator = DataGenerator(
+            validation_data_generator = IncreasingBatchSizeDataGenerator(
                 evaluation_model_data,
                 batch_size=self.config[BATCH_SIZES],
                 epochs=self.config[EPOCHS],
                 batch_strategy=self.config[BATCH_STRATEGY],
                 shuffle=True,
             )
-        data_generator = DataGenerator(
+        data_generator = IncreasingBatchSizeDataGenerator(
             model_data,
             batch_size=self.config[BATCH_SIZES],
             epochs=self.config[EPOCHS],

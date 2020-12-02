@@ -712,7 +712,7 @@ class RasaModelData:
 
         return tuple(shapes), tuple(types)
 
-    def _shuffled_data(self, data: Data) -> Data:
+    def shuffled_data(self, data: Data) -> Data:
         """Shuffle model data.
 
         Args:
@@ -725,7 +725,7 @@ class RasaModelData:
         ids = np.random.permutation(self.num_examples)
         return self._data_for_ids(data, ids)
 
-    def _balanced_data(self, data: Data, batch_size: int, shuffle: bool) -> Data:
+    def balanced_data(self, data: Data, batch_size: int, shuffle: bool) -> Data:
         """Mix model data to account for class imbalance.
 
         This batching strategy puts rare classes approximately in every other batch,
@@ -835,10 +835,10 @@ class RasaModelData:
         num_examples = self.num_examples
 
         if shuffle:
-            data = self._shuffled_data(data)
+            data = self.shuffled_data(data)
 
         if batch_strategy == BALANCED:
-            data = self._balanced_data(data, batch_size, shuffle)
+            data = self.balanced_data(data, batch_size, shuffle)
             # after balancing, number of examples increased
             num_examples = self.number_of_examples(data)
 

@@ -8,7 +8,7 @@ from rasa.utils.tensorflow.constants import SEQUENCE, BALANCED
 from rasa.utils.tensorflow.model_data import RasaModelData
 
 
-class DataGenerator(tf.keras.utils.Sequence):
+class IncreasingBatchSizeDataGenerator(tf.keras.utils.Sequence):
     def __init__(
         self,
         model_data: RasaModelData,
@@ -50,10 +50,10 @@ class DataGenerator(tf.keras.utils.Sequence):
         data = self.model_data.data
 
         if self.shuffle:
-            data = self.model_data._shuffled_data(data)
+            data = self.model_data.shuffled_data(data)
 
         if self.batch_strategy == BALANCED:
-            data = self.model_data._balanced_data(
+            data = self.model_data.balanced_data(
                 data, self.current_batch_size, self.shuffle
             )
 
