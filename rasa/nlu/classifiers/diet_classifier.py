@@ -96,6 +96,7 @@ from rasa.utils.tensorflow.constants import (
     DENSE_DIMENSION,
     MASK,
 )
+from rasa.utils.tensorflow.data_generator import DataGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -800,13 +801,47 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
 
         self.model = self._instantiate_model_class(model_data)
 
-        self.model.fit(
+        evaluation_data_generator = None
+        if self.component_config[EVAL_NUM_EXAMPLES] > 0:
+            model_data, evaluation_model_data = model_data.split(
+                self.component_config[EVAL_NUM_EXAMPLES],
+                self.component_config[RANDOM_SEED],
+            )
+            evaluation_data_generator = DataGenerator(
+                evaluation_model_data,
+                batch_size=self.component_config[BATCH_SIZES],
+                epochs=self.component_config[EPOCHS],
+                batch_strategy=self.component_config[BATCH_STRATEGY],
+                shuffle=True,
+            )
+
+        generator = DataGenerator(
             model_data,
-            self.component_config[EPOCHS],
-            self.component_config[BATCH_SIZES],
-            self.component_config[EVAL_NUM_EXAMPLES],
-            self.component_config[EVAL_NUM_EPOCHS],
-            self.component_config[BATCH_STRATEGY],
+            batch_size=self.component_config[BATCH_SIZES],
+            epochs=self.component_config[EPOCHS],
+            batch_strategy=self.component_config[BATCH_STRATEGY],
+            shuffle=True,
+        )
+
+        callbacks = []
+        if self.component_config[TENSORBOARD_LOG_DIR]:
+            callbacks.append(
+                tf.keras.callbacks.TensorBoard(
+                    log_dir=self.component_config[TENSORBOARD_LOG_DIR],
+                    update_freq=self.component_config[TENSORBOARD_LOG_LEVEL],
+                    write_graph=True,
+                    write_images=True,
+                    histogram_freq=10,
+                )
+            )
+
+        self.model.compile(run_eagerly=False)
+        self.model.fit(
+            generator,
+            epochs=self.component_config[EPOCHS],
+            validation_data=evaluation_data_generator,
+            callbacks=callbacks,
+            verbose=True,
         )
 
     # process helpers
@@ -822,7 +857,8 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
         # create session data from message and convert it into a batch of 1
         model_data = self._create_model_data([message], training=False)
 
-        return self.model.predict(model_data)
+        dataset = model_data.as_tf_dataset(1)
+        return self.model.predict(dataset)
 
     def _predict_label(
         self, predict_out: Optional[Dict[Text, tf.Tensor]]
@@ -835,7 +871,7 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
         if predict_out is None:
             return label, label_ranking
 
-        message_sim = predict_out["i_scores"].numpy()
+        message_sim = predict_out["i_scores"]
 
         message_sim = message_sim.flatten()  # sim is a matrix
 
@@ -909,8 +945,8 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
         confidence_values = {}
 
         for tag_spec in self._entity_tag_specs:
-            predictions = predict_out[f"e_{tag_spec.tag_name}_ids"].numpy()
-            confidences = predict_out[f"e_{tag_spec.tag_name}_scores"].numpy()
+            predictions = predict_out[f"e_{tag_spec.tag_name}_ids"]
+            confidences = predict_out[f"e_{tag_spec.tag_name}_scores"]
             confidences = [float(c) for c in confidences[0]]
             tags = [tag_spec.ids_to_tags[p] for p in predictions[0]]
 
@@ -1085,18 +1121,6 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
         model = cls._load_model_class(
             tf_model_file, model_data_example, label_data, entity_tag_specs, meta
         )
-
-        # build the graph for prediction
-        predict_data_example = RasaModelData(
-            label_key=label_key,
-            data={
-                feature_name: features
-                for feature_name, features in model_data_example.items()
-                if TEXT in feature_name
-            },
-        )
-
-        model.build_for_predict(predict_data_example)
 
         return model
 
@@ -1472,6 +1496,7 @@ class DIET(TransformerRasaModel):
             self.label_name,
         )
 
+        label_ids.set_shape((None, 1))
         loss, acc = self._calculate_label_loss(sentence_vector, label, label_ids)
 
         self._update_label_metrics(loss, acc)
