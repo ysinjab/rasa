@@ -97,6 +97,7 @@ from rasa.utils.tensorflow.constants import (
     MASK,
 )
 from rasa.utils.tensorflow.data_generator import DataGenerator
+from utils.tensorflow.callback import RasaTrainingLogger, RasaModelCheckpoint
 
 logger = logging.getLogger(__name__)
 
@@ -330,6 +331,8 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
         self._entity_tag_specs = entity_tag_specs
 
         self.model = model
+
+        self.tmp_checkpoint_dir = rasa.utils.io.create_temporary_directory()
 
         self._label_data: Optional[RasaModelData] = None
         self._data_example: Optional[Dict[Text, List[FeatureArray]]] = None
@@ -834,6 +837,10 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
                     histogram_freq=10,
                 )
             )
+        if self.component_config[CHECKPOINT_MODEL]:
+            callbacks.append(RasaModelCheckpoint(Path(self.tmp_checkpoint_dir)))
+
+        callbacks.append(RasaTrainingLogger(self.component_config[EPOCHS], False))
 
         self.model.compile(run_eagerly=False)
         self.model.fit(
@@ -841,7 +848,7 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
             epochs=self.component_config[EPOCHS],
             validation_data=evaluation_data_generator,
             callbacks=callbacks,
-            verbose=True,
+            verbose=False,
         )
 
     # process helpers
@@ -981,6 +988,7 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
 
         Return the metadata necessary to load the model again.
         """
+        import shutil
 
         if self.model is None:
             return {"file": None}
@@ -990,10 +998,8 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
 
         rasa.shared.utils.io.create_directory_for_file(tf_model_file)
 
-        if self.model.checkpoint_model:
-            self.model.copy_best(str(tf_model_file))
-        else:
-            self.model.save(str(tf_model_file))
+        shutil.move(self.tmp_checkpoint_dir, model_dir / "checkpoints")
+        self.model.save(str(tf_model_file))
 
         io_utils.pickle_dump(
             model_dir / f"{file_name}.data_example.pkl", self._data_example

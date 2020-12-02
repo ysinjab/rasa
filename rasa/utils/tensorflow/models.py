@@ -75,9 +75,6 @@ class RasaModel(tf.keras.models.Model):
     Cannot be used as tf.keras.Model
     """
 
-    def call(self, inputs, training=None, mask=None):
-        pass
-
     def __init__(
         self,
         random_seed: Optional[int] = None,
@@ -223,25 +220,6 @@ class RasaModel(tf.keras.models.Model):
     def save(self, model_file_name: Text, overwrite: bool = True) -> None:
         self.save_weights(model_file_name, overwrite=overwrite, save_format="tf")
 
-    def copy_best(self, model_file_name: Text) -> None:
-        checkpoint_directory, checkpoint_file = os.path.split(self.best_model_file)
-        checkpoint_path = Path(checkpoint_directory)
-
-        # Copy all tf2 model files from the temp location to the final destination
-        for f in checkpoint_path.glob(f"{checkpoint_file}*"):
-            shutil.move(str(f.absolute()), model_file_name + f.suffix)
-
-        # Generate the tf2 checkpoint file, copy+replace to ensure consistency
-        destination_path, destination_file = os.path.split(model_file_name)
-        with open(os.path.join(checkpoint_directory, "checkpoint")) as in_file, open(
-            os.path.join(destination_path, "checkpoint"), "w"
-        ) as out_file:
-            for line in in_file:
-                out_file.write(line.replace(checkpoint_file, destination_file))
-
-        # Remove the old file
-        checkpoint_path.joinpath("checkpoint").unlink()
-
     @classmethod
     def load(
         cls, model_file_name: Text, model_data_example: RasaModelData, *args, **kwargs
@@ -257,58 +235,6 @@ class RasaModel(tf.keras.models.Model):
 
         logger.debug("Finished loading the model.")
         return model
-
-    def _total_batch_loss(
-        self, batch_in: Union[Tuple[tf.Tensor], Tuple[np.ndarray]]
-    ) -> tf.Tensor:
-        """Calculate total loss"""
-
-        prediction_loss = self.batch_loss(batch_in)
-        regularization_loss = tf.math.add_n(self.losses)
-        total_loss = prediction_loss + regularization_loss
-        self.total_loss.update_state(total_loss)
-
-        return total_loss
-
-    def _does_model_improve(self, current_results: Dict[Text, Text]) -> bool:
-        # Initialize best_metrics_so_far with the first results
-        if not self.best_metrics_so_far:
-            keys = filter(
-                lambda k: True if (k.endswith("_acc") or k.endswith("_f1")) else False,
-                current_results.keys(),
-            )
-            for key in keys:
-                self.best_metrics_so_far[key] = float(current_results[key])
-            return True
-
-        all_improved = all(
-            [
-                float(current_results[key]) > self.best_metrics_so_far[key]
-                for key in self.best_metrics_so_far.keys()
-            ]
-        )
-        if all_improved:
-            for key in self.best_metrics_so_far.keys():
-                self.best_metrics_so_far[key] = float(current_results[key])
-        return all_improved
-
-    def _save_model_checkpoint(
-        self, current_results: Dict[Text, Text], epoch: int
-    ) -> None:
-        if self.checkpoint_model and self._does_model_improve(current_results):
-            logger.debug(f"Creating model checkpoint at epoch={epoch + 1}...")
-            self.best_model_epoch = epoch + 1
-            self.save(self.best_model_file, overwrite=True)
-
-    @staticmethod
-    def _should_evaluate(
-        evaluate_every_num_epochs: int, epochs: int, current_epoch: int
-    ) -> bool:
-        return (
-            current_epoch == 0
-            or (current_epoch + 1) % evaluate_every_num_epochs == 0
-            or (current_epoch + 1) == epochs
-        )
 
     @staticmethod
     def batch_to_model_data_format(
@@ -356,24 +282,8 @@ class RasaModel(tf.keras.models.Model):
 
         return batch_data
 
-    @staticmethod
-    def linearly_increasing_batch_size(
-        epoch: int, batch_size: Union[List[int], int], epochs: int
-    ) -> int:
-        """Linearly increase batch size with every epoch.
-
-        The idea comes from https://arxiv.org/abs/1711.00489.
-        """
-
-        if not isinstance(batch_size, list):
-            return int(batch_size)
-
-        if epochs > 1:
-            return int(
-                batch_size[0] + epoch * (batch_size[1] - batch_size[0]) / (epochs - 1)
-            )
-        else:
-            return int(batch_size[0])
+    def call(self, inputs, training=None, mask=None):
+        pass
 
 
 # noinspection PyMethodOverriding
