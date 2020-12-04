@@ -189,6 +189,7 @@ class RasaModel(tf.keras.models.Model):
     def predict_step(
         self, batch_in: Union[Tuple[tf.Tensor], Tuple[np.ndarray]]
     ) -> Dict[Text, tf.Tensor]:
+        self.prepare_for_predict()
         return self.batch_predict(batch_in)
 
     def _get_metric_results(self, prefix: Optional[Text] = None) -> Dict[Text, float]:
@@ -267,9 +268,10 @@ class RasaModel(tf.keras.models.Model):
         return batch_data
 
     def call(self, inputs, training=None, mask=None):
-        raise Exception(
-            "This method should neither be called nor implemented in our code."
-        )
+        pass
+
+    def prepare_for_predict(self) -> None:
+        pass
 
 
 # noinspection PyMethodOverriding

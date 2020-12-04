@@ -98,8 +98,8 @@ from rasa.utils.tensorflow.constants import (
     FEATURIZERS,
     ENTITY_RECOGNITION,
 )
-from utils.tensorflow.callback import RasaModelCheckpoint, RasaTrainingLogger
-from utils.tensorflow.data_generator import IncreasingBatchSizeDataGenerator
+from rasa.utils.tensorflow.callback import RasaModelCheckpoint, RasaTrainingLogger
+from rasa.utils.tensorflow.data_generator import IncreasingBatchSizeDataGenerator
 
 if TYPE_CHECKING:
     from rasa.shared.nlu.training_data.features import Features
@@ -622,11 +622,12 @@ class TEDPolicy(Policy):
         )
         model_data = self._create_model_data(tracker_state_features)
 
-        dataset = model_data.as_tf_dataset(1)
+        dataset = model_data.as_tf_dataset(5)
+        self.model.compile()
         output = self.model.predict(dataset)
         # take the last prediction in the sequence
-        similarities = output["similarities"].numpy()[:, -1, :]
-        confidences = output["action_scores"].numpy()[:, -1, :]
+        similarities = output["similarities"][:, -1, :]
+        confidences = output["action_scores"][:, -1, :]
         # take correct prediction from batch
         confidence, is_e2e_prediction = self._pick_confidence(confidences, similarities)
 
@@ -752,20 +753,6 @@ class TEDPolicy(Policy):
             label_data=label_data,
             entity_tag_specs=entity_tag_specs,
         )
-
-        # build the graph for prediction
-        predict_data_example = RasaModelData(
-            label_key=LABEL_KEY,
-            label_sub_key=LABEL_SUB_KEY,
-            data={
-                feature_name: features
-                for feature_name, features in model_data_example.items()
-                if feature_name
-                # we need to remove label features for prediction if they are present
-                in STATE_LEVEL_FEATURES + SENTENCE_FEATURES_TO_ENCODE + [DIALOGUE]
-            },
-        )
-        model.build_for_predict(predict_data_example)
 
         return cls(
             featurizer=featurizer,
@@ -1577,6 +1564,9 @@ class TED(TransformerRasaModel):
         return tf.math.add_n(losses)
 
     # ---PREDICTION---
+    def prepare_for_predict(self) -> None:
+        """Prepares the model for prediction."""
+        _, self.all_labels_embed = self._create_all_labels_embed()
 
     def batch_predict(
         self, batch_in: Union[Tuple[tf.Tensor], Tuple[np.ndarray]]

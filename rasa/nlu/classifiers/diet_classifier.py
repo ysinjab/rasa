@@ -97,7 +97,7 @@ from rasa.utils.tensorflow.constants import (
     MASK,
 )
 from rasa.utils.tensorflow.data_generator import IncreasingBatchSizeDataGenerator
-from utils.tensorflow.callback import RasaTrainingLogger, RasaModelCheckpoint
+from rasa.utils.tensorflow.callback import RasaTrainingLogger, RasaModelCheckpoint
 
 logger = logging.getLogger(__name__)
 
@@ -1583,6 +1583,11 @@ class DIET(TransformerRasaModel):
         elif tag_name == ENTITY_ATTRIBUTE_ROLE:
             self.entity_role_loss.update_state(loss)
             self.entity_role_f1.update_state(f1)
+
+    def prepare_for_predict(self) -> None:
+        """Prepares the model for prediction."""
+        if self.config[INTENT_CLASSIFICATION]:
+            _, self.all_labels_embed = self._create_all_labels()
 
     def batch_predict(
         self, batch_in: Union[Tuple[tf.Tensor], Tuple[np.ndarray]]
