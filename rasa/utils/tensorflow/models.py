@@ -58,7 +58,7 @@ from rasa.utils.tensorflow.constants import (
 )
 from rasa.utils.tensorflow import layers
 from rasa.utils.tensorflow.transformer import TransformerEncoder
-from utils.tensorflow.data_adapter import CustomDataHandler
+from rasa.utils.tensorflow.data_adapter import CustomDataHandler
 
 logger = logging.getLogger(__name__)
 

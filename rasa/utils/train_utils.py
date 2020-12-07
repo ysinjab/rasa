@@ -23,9 +23,9 @@ from rasa.utils.tensorflow.constants import (
     COSINE,
     SEQUENCE,
 )
-from utils.tensorflow.callback import RasaTrainingLogger, RasaModelCheckpoint
-from utils.tensorflow.data_generator import IncreasingBatchSizeDataGenerator
-from utils.tensorflow.model_data import RasaModelData
+from rasa.utils.tensorflow.callback import RasaTrainingLogger, RasaModelCheckpoint
+from rasa.utils.tensorflow.data_generator import IncreasingBatchSizeDataGenerator
+from rasa.utils.tensorflow.model_data import RasaModelData
 
 
 def normalize(values: np.ndarray, ranking_length: Optional[int] = 0) -> np.ndarray:
