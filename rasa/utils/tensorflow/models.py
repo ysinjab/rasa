@@ -67,56 +67,13 @@ TENSORBOARD_LOG_LEVELS = ["epoch", "minibatch"]
 
 
 # noinspection PyMethodOverriding
-class RasaModel(tf.keras.models.Model):
-    """Completely override all public methods of keras Model.
+class TmpKerasModel(tf.keras.models.Model):
+    """Temporary solution. Keras model that uses a custom data adapter inside fit."""
 
-    Cannot be used as tf.keras.Model
-    """
-
-    def __init__(
-        self,
-        random_seed: Optional[int] = None,
-        tensorboard_log_dir: Optional[Text] = None,
-        tensorboard_log_level: Optional[Text] = "epoch",
-        checkpoint_model: Optional[bool] = False,
-        **kwargs,
-    ) -> None:
-        """Initialize the RasaModel.
-
-        Args:
-            random_seed: set the random seed to get reproducible results
-        """
-        super().__init__(**kwargs)
-
-        self.total_loss = tf.keras.metrics.Mean(name="t_loss")
-        self.metrics_to_log = ["t_loss"]
-
-        self._training = None  # training phase should be defined when building a graph
-
-        self._predict_function = None
-
-        self.random_seed = random_seed
-
-        tf.random.set_seed(self.random_seed)
-        np.random.seed(self.random_seed)
-
-        self.tensorboard_log_dir = tensorboard_log_dir
-        self.tensorboard_log_level = tensorboard_log_level
-
-        self.train_summary_writer = None
-        self.test_summary_writer = None
-        self.model_summary_file = None
-        self.tensorboard_log_on_epochs = True
-
-        self.best_metrics_so_far = {}
-        self.checkpoint_model = checkpoint_model
-        self.best_model_file = None
-        self.best_model_epoch = -1
-        if self.checkpoint_model:
-            model_checkpoint_dir = rasa.utils.io.create_temporary_directory()
-            self.best_model_file = os.path.join(
-                model_checkpoint_dir, f"{CHECKPOINT_MODEL_NAME}.tf_model"
-            )
+    # TODO
+    #  we don't need this anymore once
+    #  https://github.com/tensorflow/tensorflow/pull/45338
+    #  is merged and released
 
     @training.enable_multi_worker
     def fit(
@@ -194,11 +151,6 @@ class RasaModel(tf.keras.models.Model):
             ValueError: In case of mismatch between the provided input data
                 and what the model expects.
         """
-        # TODO
-        #  we don't need this anymore once
-        #  https://github.com/tensorflow/tensorflow/pull/45338
-        #  is merged and released
-
         training._keras_api_gauge.get_cell("fit").set(True)
         # Legacy graph support is contained in `training_v1.Model`.
         version_utils.disallow_legacy_graph("Model", "fit")
@@ -328,6 +280,59 @@ class RasaModel(tf.keras.models.Model):
                 del self._eval_data_handler
             callbacks.on_train_end(logs=training_logs)
             return self.history
+
+
+# noinspection PyMethodOverriding
+class RasaModel(TmpKerasModel):
+    """Completely override all public methods of keras Model.
+
+    Cannot be used as tf.keras.Model
+    """
+
+    def __init__(
+        self,
+        random_seed: Optional[int] = None,
+        tensorboard_log_dir: Optional[Text] = None,
+        tensorboard_log_level: Optional[Text] = "epoch",
+        checkpoint_model: Optional[bool] = False,
+        **kwargs,
+    ) -> None:
+        """Initialize the RasaModel.
+
+        Args:
+            random_seed: set the random seed to get reproducible results
+        """
+        super().__init__(**kwargs)
+
+        self.total_loss = tf.keras.metrics.Mean(name="t_loss")
+        self.metrics_to_log = ["t_loss"]
+
+        self._training = None  # training phase should be defined when building a graph
+
+        self._predict_function = None
+
+        self.random_seed = random_seed
+
+        tf.random.set_seed(self.random_seed)
+        np.random.seed(self.random_seed)
+
+        self.tensorboard_log_dir = tensorboard_log_dir
+        self.tensorboard_log_level = tensorboard_log_level
+
+        self.train_summary_writer = None
+        self.test_summary_writer = None
+        self.model_summary_file = None
+        self.tensorboard_log_on_epochs = True
+
+        self.best_metrics_so_far = {}
+        self.checkpoint_model = checkpoint_model
+        self.best_model_file = None
+        self.best_model_epoch = -1
+        if self.checkpoint_model:
+            model_checkpoint_dir = rasa.utils.io.create_temporary_directory()
+            self.best_model_file = os.path.join(
+                model_checkpoint_dir, f"{CHECKPOINT_MODEL_NAME}.tf_model"
+            )
 
     def batch_loss(
         self, batch_in: Union[Tuple[tf.Tensor], Tuple[np.ndarray]]
@@ -486,7 +491,28 @@ class RasaModel(tf.keras.models.Model):
 
         return batch_data
 
-    def call(self, inputs, training=None, mask=None):
+    def call(
+        self,
+        inputs: Union[tf.Tensor, List[tf.Tensor]],
+        training: Optional[tf.Tensor] = None,
+        mask: Optional[tf.Tensor] = None,
+    ) -> Union[tf.Tensor, List[tf.Tensor]]:
+        """Calls the model on new inputs.
+
+        Arguments:
+            inputs: A tensor or list of tensors.
+            training: Boolean or boolean scalar tensor, indicating whether to run
+              the `Network` in training mode or inference mode.
+            mask: A mask or list of masks. A mask can be
+                either a tensor or None (no mask).
+
+        Returns:
+            A tensor if there is a single output, or
+            a list of tensors if there are more than one outputs.
+        """
+        # This method needs to be implemented, otherwise the super class is raising a
+        # NotImplementedError('When subclassing the `Model` class, you should
+        #   implement a `call` method.')
         pass
 
     def prepare_for_predict(self) -> None:
