@@ -591,9 +591,10 @@ class TEDPolicy(Policy):
         )
         model_data = self._create_model_data(tracker_state_features)
 
-        dataset = model_data.as_tf_dataset(5)
+        dataset = model_data.as_tf_dataset(batch_size=len(tracker_state_features))
         self.model.compile()
         output = self.model.predict(dataset)
+
         # take the last prediction in the sequence
         similarities = output["similarities"][:, -1, :]
         confidences = output["action_scores"][:, -1, :]

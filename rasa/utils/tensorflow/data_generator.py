@@ -1,22 +1,32 @@
-from typing import List, Union, Text, Optional, Any, Iterator, Tuple
+from typing import List, Union, Text, Optional, Any, Tuple
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.python.ops.gen_dataset_ops import iterator
 
 from rasa.utils.tensorflow.constants import SEQUENCE, BALANCED
 from rasa.utils.tensorflow.model_data import RasaModelData
 
 
 class IncreasingBatchSizeDataGenerator(tf.keras.utils.Sequence):
+    """Data generator used during training."""
+
     def __init__(
         self,
         model_data: RasaModelData,
-        batch_size: List[int],
+        batch_size: Union[int, List[int]],
         epochs: int,
         batch_strategy: Text = SEQUENCE,
         shuffle: bool = True,
     ):
+        """Initializes the increasing batch size data generator.
+
+        Args:
+            model_data: The model data to use.
+            batch_size: The batch sizes.
+            epochs: The total number of epochs.
+            batch_strategy: The batch strategy.
+            shuffle: If 'Ture', data will be shuffled.
+        """
         self.model_data = model_data
 
         self.batch_size = batch_size
@@ -31,15 +41,29 @@ class IncreasingBatchSizeDataGenerator(tf.keras.utils.Sequence):
         self.on_epoch_end()
 
     def __len__(self) -> int:
+        """Number of batches in the Sequence.
+
+        Returns:
+            The number of batches in the Sequence.
+        """
         num_examples = self.model_data.num_examples
         batch_size = self.current_batch_size
         len = num_examples // batch_size + int(num_examples % batch_size > 0)
         return len
 
-    def __getitem__(self, index: int) -> Tuple[Any, Any, Any]:
-        return self._gen_batch(index), None, None
+    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+        """Gets batch at position `index`.
+
+        Arguments:
+            index: position of the batch in the Sequence.
+
+        Returns:
+            A batch (tuple of input data and target data).
+        """
+        return self._gen_batch(index), None
 
     def on_epoch_end(self) -> None:
+        """Update the data after every epoch."""
         self.current_epoch += 1
         self.current_batch_size = self.linearly_increasing_batch_size(
             self.current_epoch, self.batch_size, self.epochs
@@ -72,6 +96,14 @@ class IncreasingBatchSizeDataGenerator(tf.keras.utils.Sequence):
         """Linearly increase batch size with every epoch.
 
         The idea comes from https://arxiv.org/abs/1711.00489.
+
+        Args:
+            epoch: The current epoch number.
+            batch_size: The batch sizes to use.
+            epochs: The total number of epochs.
+
+        Returns:
+            The batch size to use in this epoch.
         """
         if not isinstance(batch_size, list):
             return int(batch_size)
