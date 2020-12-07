@@ -245,7 +245,7 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
         TENSORBOARD_LOG_DIR: None,
         # Define when training metrics for tensorboard should be logged.
         # Either after every epoch or for every training step.
-        # Valid values: 'epoch' and 'minibatch'
+        # Valid values: 'epoch' and 'batch'
         TENSORBOARD_LOG_LEVEL: "epoch",
         # Perform model checkpointing
         CHECKPOINT_MODEL: False,
@@ -332,7 +332,9 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
 
         self.model = model
 
-        self.tmp_checkpoint_dir = rasa.utils.io.create_temporary_directory()
+        self.tmp_checkpoint_dir = None
+        if self.component_config[CHECKPOINT_MODEL]:
+            self.tmp_checkpoint_dir = Path(rasa.utils.io.create_temporary_directory())
 
         self._label_data: Optional[RasaModelData] = None
         self._data_example: Optional[Dict[Text, List[FeatureArray]]] = None
@@ -804,10 +806,20 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
 
         self.model = self._instantiate_model_class(model_data)
 
-        data_generator, validation_data_generator = self._create_data_generators(
-            model_data
+        data_generator, validation_data_generator = train_utils.create_data_generators(
+            model_data,
+            self.component_config[BATCH_SIZES],
+            self.component_config[EPOCHS],
+            self.component_config[BATCH_STRATEGY],
+            self.component_config[EVAL_NUM_EXAMPLES],
+            self.component_config[RANDOM_SEED],
         )
-        callbacks = self._create_callbacks()
+        callbacks = train_utils.create_common_callbacks(
+            self.component_config[EPOCHS],
+            self.component_config[TENSORBOARD_LOG_DIR],
+            self.component_config[TENSORBOARD_LOG_LEVEL],
+            self.tmp_checkpoint_dir,
+        )
 
         self.model.compile(run_eagerly=False)
         self.model.fit(
@@ -818,52 +830,6 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
             callbacks=callbacks,
             verbose=False,
         )
-
-    def _create_data_generators(
-        self, model_data: RasaModelData
-    ) -> Tuple[IncreasingBatchSizeDataGenerator, IncreasingBatchSizeDataGenerator]:
-        validation_data_generator = None
-        if self.component_config[EVAL_NUM_EXAMPLES] > 0:
-            model_data, evaluation_model_data = model_data.split(
-                self.component_config[EVAL_NUM_EXAMPLES],
-                self.component_config[RANDOM_SEED],
-            )
-            validation_data_generator = IncreasingBatchSizeDataGenerator(
-                evaluation_model_data,
-                batch_size=self.component_config[BATCH_SIZES],
-                epochs=self.component_config[EPOCHS],
-                batch_strategy=self.component_config[BATCH_STRATEGY],
-                shuffle=True,
-            )
-
-        data_generator = IncreasingBatchSizeDataGenerator(
-            model_data,
-            batch_size=self.component_config[BATCH_SIZES],
-            epochs=self.component_config[EPOCHS],
-            batch_strategy=self.component_config[BATCH_STRATEGY],
-            shuffle=True,
-        )
-
-        return data_generator, validation_data_generator
-
-    def _create_callbacks(self) -> List[tf.keras.callbacks.Callback]:
-        callbacks = [RasaTrainingLogger(self.component_config[EPOCHS], silent=False)]
-
-        if self.component_config[TENSORBOARD_LOG_DIR]:
-            callbacks.append(
-                tf.keras.callbacks.TensorBoard(
-                    log_dir=self.component_config[TENSORBOARD_LOG_DIR],
-                    update_freq=self.component_config[TENSORBOARD_LOG_LEVEL],
-                    write_graph=True,
-                    write_images=True,
-                    histogram_freq=10,
-                )
-            )
-
-        if self.component_config[CHECKPOINT_MODEL]:
-            callbacks.append(RasaModelCheckpoint(Path(self.tmp_checkpoint_dir)))
-
-        return callbacks
 
     # process helpers
     def _predict(self, message: Message) -> Optional[Dict[Text, tf.Tensor]]:

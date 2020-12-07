@@ -1,5 +1,7 @@
+from pathlib import Path
 from typing import Optional, Text, Dict, Any, Union, List, Tuple
 
+import tensorflow as tf
 import numpy as np
 
 import rasa.shared.utils.common
@@ -19,7 +21,11 @@ from rasa.utils.tensorflow.constants import (
     AUTO,
     INNER,
     COSINE,
+    SEQUENCE,
 )
+from utils.tensorflow.callback import RasaTrainingLogger, RasaModelCheckpoint
+from utils.tensorflow.data_generator import IncreasingBatchSizeDataGenerator
+from utils.tensorflow.model_data import RasaModelData
 
 
 def normalize(values: np.ndarray, ranking_length: Optional[int] = 0) -> np.ndarray:
@@ -186,3 +192,99 @@ def check_deprecated_options(config: Dict[Text, Any]) -> Dict[Text, Any]:
     # note: call _replace_deprecated_option() here when there are options to deprecate
 
     return config
+
+
+def create_data_generators(
+    model_data: RasaModelData,
+    batch_sizes: Union[int, List[int]],
+    epochs: int,
+    batch_strategy: Text = SEQUENCE,
+    eval_num_examples: int = 0,
+    random_seed: Optional[int] = None,
+) -> Tuple[
+    IncreasingBatchSizeDataGenerator, Optional[IncreasingBatchSizeDataGenerator]
+]:
+    """Create data generators for train and optional validation data.
+
+    Args:
+        model_data: The model data to use.
+        batch_sizes: The batch size(s).
+        epochs: The number of epochs to train.
+        batch_strategy: The batch strategy to use.
+        eval_num_examples: Number of examples to use for validation data.
+        random_seed: The random seed.
+
+    Returns:
+        The training data generator and optional validation data generator.
+    """
+    validation_data_generator = None
+    if eval_num_examples > 0:
+        model_data, evaluation_model_data = model_data.split(
+            eval_num_examples, random_seed,
+        )
+        validation_data_generator = IncreasingBatchSizeDataGenerator(
+            evaluation_model_data,
+            batch_size=batch_sizes,
+            epochs=epochs,
+            batch_strategy=batch_strategy,
+            shuffle=True,
+        )
+
+    data_generator = IncreasingBatchSizeDataGenerator(
+        model_data,
+        batch_size=batch_sizes,
+        epochs=epochs,
+        batch_strategy=batch_strategy,
+        shuffle=True,
+    )
+
+    return data_generator, validation_data_generator
+
+
+def create_common_callbacks(
+    epochs: int,
+    tensorboard_log_dir: Optional[Text] = None,
+    tensorboard_log_level: Optional[Text] = None,
+    checkpoint_dir: Optional[Path] = None,
+) -> List[tf.keras.callbacks.Callback]:
+    """Create common callbacks.
+
+    The following callbacks are created:
+    - RasaTrainingLogger callback
+    - Optional TensorBoard callback
+    - Optional RasaModelCheckpoint callback
+
+    Args:
+        epochs: the number of epochs to train
+        tensorboard_log_dir: optional directory that should be used for tensorboard
+        tensorboard_log_level: defines when training metrics for tensorboard should be
+                               logged. Valid values: 'epoch' and 'batch'.
+        checkpoint_dir: optional directory that should be used for model checkpointing
+
+    Returns:
+        A list of callbacks.
+    """
+    callbacks = [RasaTrainingLogger(epochs, silent=False)]
+
+    if tensorboard_log_dir:
+        if tensorboard_log_level == "minibatch":
+            tensorboard_log_level = "batch"
+            rasa.shared.utils.io.raise_warning(
+                "You set 'tensorboard_log_level' to 'minibatch'. This value should not "
+                "be used anymore. Please use 'batch' instead."
+            )
+
+        callbacks.append(
+            tf.keras.callbacks.TensorBoard(
+                log_dir=tensorboard_log_dir,
+                update_freq=tensorboard_log_level,
+                write_graph=True,
+                write_images=True,
+                histogram_freq=10,
+            )
+        )
+
+    if checkpoint_dir:
+        callbacks.append(RasaModelCheckpoint(checkpoint_dir))
+
+    return callbacks
