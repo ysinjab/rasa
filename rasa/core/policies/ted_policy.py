@@ -515,7 +515,7 @@ class TEDPolicy(Policy):
             self.tmp_checkpoint_dir,
         )
 
-        self.model.compile(run_eagerly=False)
+        self.model.compile()
         self.model.fit(
             data_generator,
             epochs=self.config[EPOCHS],
@@ -767,7 +767,6 @@ class TEDPolicy(Policy):
 
         model = TED.load(
             str(tf_model_file),
-            model_data_example,
             data_signature=model_data_example.get_signature(),
             config=meta,
             # during prediction we don't care about previous dialogue turns,
