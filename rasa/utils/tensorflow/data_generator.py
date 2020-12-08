@@ -60,16 +60,14 @@ class RasaDataGenerator(tf.keras.utils.Sequence):
         """Update the data after every epoch."""
         pass
 
-    def _shuffle_and_balance(self):
+    def _shuffle_and_balance(self, batch_size: int):
         data = self.model_data.data
 
         if self.shuffle:
             data = self.model_data.shuffled_data(data)
 
         if self.batch_strategy == BALANCED:
-            data = self.model_data.balanced_data(
-                data, self.current_batch_size, self.shuffle
-            )
+            data = self.model_data.balanced_data(data, batch_size, self.shuffle)
 
         self.model_data.data = data
 
@@ -341,7 +339,7 @@ class IncreasingBatchSizeDataGenerator(RasaDataGenerator):
     def __init__(
         self,
         model_data: RasaModelData,
-        batch_size: int,
+        batch_size: Union[List[int], int],
         epochs: int = 1,
         batch_strategy: Text = SEQUENCE,
         shuffle: bool = True,
@@ -390,7 +388,7 @@ class IncreasingBatchSizeDataGenerator(RasaDataGenerator):
         self.current_batch_size = self.linearly_increasing_batch_size(
             self.current_epoch, self.batch_size, self.epochs
         )
-        self._shuffle_and_balance()
+        self._shuffle_and_balance(self.current_batch_size)
 
     @staticmethod
     def linearly_increasing_batch_size(
@@ -474,4 +472,4 @@ class FixBatchSizeDataGenerator(RasaDataGenerator):
 
     def on_epoch_end(self) -> None:
         """Update the data after every epoch."""
-        self._shuffle_and_balance()
+        self._shuffle_and_balance(self.batch_size)
