@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Text
+from typing import Text
 
 import pytest
 
@@ -691,7 +691,7 @@ def assert_predicted_action(
 ) -> None:
     assert prediction.max_confidence == confidence
     index_of_predicted_action = prediction.max_confidence_index
-    prediction_action_name = domain.action_names[index_of_predicted_action]
+    prediction_action_name = domain.action_names_or_texts[index_of_predicted_action]
     assert prediction_action_name == expected_action_name
 
 
@@ -921,7 +921,6 @@ async def test_form_unhappy_path():
     prediction = policy.predict_action_probabilities(
         unhappy_form_conversation, domain, RegexInterpreter()
     )
-
     assert_predicted_action(prediction, domain, UTTER_GREET_ACTION)
 
 
@@ -1370,7 +1369,6 @@ async def test_form_activation_rule():
         domain,
         RegexInterpreter(),
     )
-
     assert_predicted_action(prediction, domain, form_name)
 
 

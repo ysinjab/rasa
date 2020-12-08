@@ -57,6 +57,8 @@ from rasa.shared.core.events import (
     ActiveLoop,
     SessionStarted,
     ActionExecutionRejected,
+    DefinePrevUserUtteredFeaturization,
+    DefinePrevUserUtteredEntities,
 )
 from rasa.shared.core.domain import Domain, State
 from rasa.shared.core.slots import Slot
@@ -236,7 +238,7 @@ class DialogueStateTracker:
 
     @staticmethod
     def freeze_current_state(state: State) -> FrozenState:
-        frozen_state = frozenset(
+        return frozenset(
             {
                 key: frozenset(values.items())
                 if isinstance(values, Dict)
@@ -244,7 +246,6 @@ class DialogueStateTracker:
                 for key, values in state.items()
             }.items()
         )
-        return frozen_state
 
     def past_states(self, domain: Domain) -> List[State]:
         """Generate the past states of this tracker based on the history.
@@ -257,7 +258,7 @@ class DialogueStateTracker:
         """
         return domain.states_for_tracker_history(self)
 
-    def change_loop_to(self, loop_name: Text) -> None:
+    def change_loop_to(self, loop_name: Optional[Text]) -> None:
         """Set the currently active loop.
 
         Args:
@@ -305,8 +306,12 @@ class DialogueStateTracker:
             self.active_loop[LOOP_REJECTED] = True
 
     def set_latest_action(self, action: Dict[Text, Text]) -> None:
-        """Set latest action name
-        and reset form validation and rejection parameters
+        """Sets latest action name or text.
+
+        Resets loop validation and rejection parameters.
+
+        Args:
+            action: Serialized action event.
         """
         self.latest_action = action
         if self.active_loop_name:
@@ -425,10 +430,12 @@ class DialogueStateTracker:
             for event in self.events
             if isinstance(event, ActiveLoop) and event.name
         ]
+        # we'll need to slice events, so convert the deque into a list
+        events_as_list = list(self.events)
 
         applied_events = []
 
-        for event in self.events:
+        for i, event in enumerate(self.events):
             if isinstance(event, (Restarted, SessionStarted)):
                 applied_events = []
             elif isinstance(event, ActionReverted):
@@ -450,15 +457,53 @@ class DialogueStateTracker:
                 self._undo_till_previous_loop_execution(
                     event.action_name, applied_events
                 )
+            elif isinstance(event, UserUttered):
+                # update event's featurization based on the future event
+                use_text_for_featurization = self._define_user_featurization(
+                    events_as_list[i + 1 :]
+                )
+                if event.use_text_for_featurization is None:
+                    event.use_text_for_featurization = use_text_for_featurization
+                # update event's entities based on the future event
+                entities = self._define_user_entities(events_as_list[i + 1 :])
+                if entities is not None:
+                    for entity in entities:
+                        if entity not in event.entities:
+                            event.entities.append(entity)
+
+                applied_events.append(event)
             else:
                 applied_events.append(event)
 
         return applied_events
 
     @staticmethod
+    def _define_user_featurization(future_events: List[Event]) -> bool:
+        for future_event in future_events:
+            if isinstance(future_event, ActionExecuted):
+                # use intent by default
+                return False
+            elif isinstance(future_event, DefinePrevUserUtteredFeaturization):
+                return future_event.use_text_for_featurization
+
+    @staticmethod
+    def _define_user_entities(
+        future_events: List[Event],
+    ) -> Optional[List[Dict[Text, Any]]]:
+        for future_event in future_events:
+            if isinstance(future_event, ActionExecuted):
+                # the search should happen only within one dialogue turn
+                return None
+            if isinstance(future_event, DefinePrevUserUtteredEntities):
+                return future_event.entities
+
+    @staticmethod
     def _undo_till_previous(event_type: Type[Event], done_events: List[Event]) -> None:
-        """Removes events from `done_events` until the first occurrence `event_type`
-        is found which is also removed."""
+        """Removes events from `done_events`.
+
+        Removes events from `done_events` until the first occurrence `event_type`
+        is found which is also removed.
+        """
         # list gets modified - hence we need to copy events!
         for e in reversed(done_events[:]):
             del done_events[-1]

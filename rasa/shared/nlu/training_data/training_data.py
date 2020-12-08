@@ -166,7 +166,16 @@ class TrainingData:
 
     @lazy_property
     def nlu_examples(self) -> List[Message]:
-        return [ex for ex in self.training_examples if not ex.is_core_message()]
+        """Return examples which have come from NLU training data.
+
+        E.g. If the example came from a story or domain it is not included.
+
+        Returns:
+            List of NLU training examples.
+        """
+        return [
+            ex for ex in self.training_examples if not ex.is_core_or_domain_message()
+        ]
 
     @lazy_property
     def intent_examples(self) -> List[Message]:
@@ -663,7 +672,6 @@ class TrainingData:
 
     def is_empty(self) -> bool:
         """Checks if any training data was loaded."""
-
         lists_to_check = [
             self.training_examples,
             self.entity_synonyms,
@@ -672,9 +680,8 @@ class TrainingData:
         ]
         return not any([len(lst) > 0 for lst in lists_to_check])
 
-    def can_train_nlu_model(self) -> bool:
+    def contains_no_pure_nlu_data(self) -> bool:
         """Checks if any NLU training data was loaded."""
-
         lists_to_check = [
             self.nlu_examples,
             self.entity_synonyms,
@@ -730,6 +737,10 @@ class TrainingData:
             )
         )
         return all_chunks
+
+    def has_e2e_examples(self):
+        """Checks if there are any training examples from e2e stories."""
+        return any(message.is_e2e_message() for message in self.training_examples)
 
 
 class TrainingDataChunk(TrainingData):

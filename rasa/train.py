@@ -187,7 +187,7 @@ async def _train_async_internal(
         file_importer.get_stories(), file_importer.get_nlu_data()
     )
 
-    if stories.is_empty() and nlu_data.can_train_nlu_model():
+    if stories.is_empty() and nlu_data.contains_no_pure_nlu_data():
         print_error(
             "No training data given. Please provide stories and NLU data in "
             "order to train a Rasa model using the '--data' argument."
@@ -205,7 +205,8 @@ async def _train_async_internal(
             number_of_chunks=number_of_chunks,
         )
 
-    if nlu_data.can_train_nlu_model():
+    # We will train nlu if there are any nlu example, including from e2e stories.
+    if nlu_data.contains_no_pure_nlu_data() and not nlu_data.has_e2e_examples():
         print_warning("No NLU data present. Just a Rasa Core model will be trained.")
         return await _train_core_with_validated_data(
             file_importer,
@@ -220,7 +221,7 @@ async def _train_async_internal(
 
     if not force_training:
         fingerprint_comparison = model.should_retrain(
-            new_fingerprint, old_model, train_path
+            new_fingerprint, old_model, train_path, nlu_data.has_e2e_examples()
         )
     else:
         fingerprint_comparison = FingerprintComparisonResult(force_training=True)
@@ -409,7 +410,19 @@ async def train_core_async(
     file_importer = TrainingDataImporter.load_core_importer_from_config(
         config, domain, [stories]
     )
-    domain = await file_importer.get_domain()
+    stories, nlu_data, domain = await asyncio.gather(
+        file_importer.get_stories(),
+        file_importer.get_nlu_data(),
+        file_importer.get_domain(),
+    )
+
+    if nlu_data.has_e2e_examples():
+        print_error(
+            "Stories file contains e2e stories. Please train using `rasa train` so that"
+            " the NLU model is also trained."
+        )
+        return None
+
     if domain.is_empty():
         print_error(
             "Core training was skipped because no valid domain file was found. "
@@ -418,7 +431,7 @@ async def train_core_async(
         )
         return None
 
-    if not await file_importer.get_stories():
+    if not stories:
         print_error(
             "No stories given. Please provide stories in order to "
             "train a Rasa Core model using the '--stories' argument."
@@ -584,7 +597,7 @@ async def _train_nlu_async(
     )
 
     training_data = await file_importer.get_nlu_data()
-    if training_data.can_train_nlu_model():
+    if training_data.contains_no_pure_nlu_data():
         print_error(
             f"Path '{nlu_data}' doesn't contain valid NLU data in it. "
             f"Please verify the data format. "

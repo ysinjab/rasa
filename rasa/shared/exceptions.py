@@ -77,3 +77,7 @@ class InvalidConfigException(ValueError, RasaException):
 
 class RasaTrainChunkException(RasaException):
     """Basic exception for errors raised by `rasa train-in-chunks` commands."""
+
+
+class UnsupportedFeatureException(RasaCoreException):
+    """Raised if a requested feature is not supported."""

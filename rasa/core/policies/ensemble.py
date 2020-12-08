@@ -6,7 +6,7 @@ import sys
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Text, Optional, Any, List, Dict, Tuple, NamedTuple, Union
+from typing import Text, Optional, Any, List, Dict, Tuple, Union
 
 import rasa.core
 import rasa.core.training.training
@@ -30,7 +30,11 @@ from rasa.shared.core.constants import (
     ACTION_BACK_NAME,
 )
 from rasa.shared.core.domain import InvalidDomain, Domain
-from rasa.shared.core.events import ActionExecutionRejected, ActionExecuted
+from rasa.shared.core.events import (
+    ActionExecutionRejected,
+    ActionExecuted,
+    DefinePrevUserUtteredFeaturization,
+)
 from rasa.core.exceptions import UnsupportedDialogueModelError
 from rasa.core.featurizers.tracker_featurizers import MaxHistoryTrackerFeaturizer
 from rasa.shared.nlu.interpreter import NaturalLanguageInterpreter, RegexInterpreter
@@ -715,8 +719,7 @@ class SimplePolicyEnsemble(PolicyEnsemble):
                 additional features.
 
         Returns:
-            best_probabilities: the list of probabilities for the next actions
-            best_policy_name: the name of the picked policy
+            The best policy prediction.
         """
         winning_prediction = self._best_policy_prediction(tracker, domain, interpreter)
 
@@ -730,6 +733,20 @@ class SimplePolicyEnsemble(PolicyEnsemble):
             )
         ):
             winning_prediction = self._fallback_after_listen(domain, winning_prediction)
+
+        if tracker.latest_action_name == ACTION_LISTEN_NAME:
+            if winning_prediction.is_end_to_end_prediction:
+                logger.debug("Made e2e prediction using user text.")
+                logger.debug("Added `DefinePrevUserUtteredFeaturization(True)` event.")
+                winning_prediction.events.append(
+                    DefinePrevUserUtteredFeaturization(True)
+                )
+            else:
+                logger.debug("Made prediction using user intent.")
+                logger.debug("Added `DefinePrevUserUtteredFeaturization(False)` event.")
+                winning_prediction.events.append(
+                    DefinePrevUserUtteredFeaturization(False)
+                )
 
         logger.debug(f"Predicted next action using {winning_prediction.policy_name}.")
         return winning_prediction

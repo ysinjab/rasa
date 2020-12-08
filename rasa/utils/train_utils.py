@@ -1,9 +1,12 @@
-from typing import Optional, Text, Dict, Any, Union, List, Tuple
+from pathlib import Path
+from typing import Optional, Text, Dict, Any, Union, List, Tuple, TYPE_CHECKING
 
+import tensorflow as tf
 import numpy as np
 
 import rasa.shared.utils.common
 import rasa.shared.utils.io
+import rasa.nlu.utils.bilou_utils
 from rasa.shared.constants import NEXT_MAJOR_VERSION_FOR_DEPRECATIONS
 from rasa.nlu.constants import NUMBER_OF_SUB_TOKENS
 from rasa.nlu.tokenizers.tokenizer import Token
@@ -19,14 +22,21 @@ from rasa.utils.tensorflow.constants import (
     AUTO,
     INNER,
     COSINE,
+    SEQUENCE,
 )
+from rasa.utils.tensorflow.callback import RasaTrainingLogger, RasaModelCheckpoint
+from rasa.utils.tensorflow.data_generator import IncreasingBatchSizeDataGenerator
+from rasa.utils.tensorflow.model_data import RasaModelData
+
+if TYPE_CHECKING:
+    from rasa.nlu.classifiers.diet_classifier import EntityTagSpec
 
 
 def normalize(values: np.ndarray, ranking_length: Optional[int] = 0) -> np.ndarray:
     """Normalizes an array of positive numbers over the top `ranking_length` values.
+
     Other values will be set to 0.
     """
-
     new_values = values.copy()  # prevent mutation of the input
     if 0 < ranking_length < len(new_values):
         ranked = sorted(new_values, reverse=True)
@@ -186,3 +196,142 @@ def check_deprecated_options(config: Dict[Text, Any]) -> Dict[Text, Any]:
     # note: call _replace_deprecated_option() here when there are options to deprecate
 
     return config
+
+
+def create_data_generators(
+    model_data: RasaModelData,
+    batch_sizes: Union[int, List[int]],
+    epochs: int,
+    batch_strategy: Text = SEQUENCE,
+    eval_num_examples: int = 0,
+    random_seed: Optional[int] = None,
+) -> Tuple[
+    IncreasingBatchSizeDataGenerator, Optional[IncreasingBatchSizeDataGenerator]
+]:
+    """Create data generators for train and optional validation data.
+
+    Args:
+        model_data: The model data to use.
+        batch_sizes: The batch size(s).
+        epochs: The number of epochs to train.
+        batch_strategy: The batch strategy to use.
+        eval_num_examples: Number of examples to use for validation data.
+        random_seed: The random seed.
+
+    Returns:
+        The training data generator and optional validation data generator.
+    """
+    validation_data_generator = None
+    if eval_num_examples > 0:
+        model_data, evaluation_model_data = model_data.split(
+            eval_num_examples, random_seed,
+        )
+        validation_data_generator = IncreasingBatchSizeDataGenerator(
+            evaluation_model_data,
+            batch_size=batch_sizes,
+            epochs=epochs,
+            batch_strategy=batch_strategy,
+            shuffle=True,
+        )
+
+    data_generator = IncreasingBatchSizeDataGenerator(
+        model_data,
+        batch_size=batch_sizes,
+        epochs=epochs,
+        batch_strategy=batch_strategy,
+        shuffle=True,
+    )
+
+    return data_generator, validation_data_generator
+
+
+def create_common_callbacks(
+    epochs: int,
+    tensorboard_log_dir: Optional[Text] = None,
+    tensorboard_log_level: Optional[Text] = None,
+    checkpoint_dir: Optional[Path] = None,
+) -> List[tf.keras.callbacks.Callback]:
+    """Create common callbacks.
+
+    The following callbacks are created:
+    - RasaTrainingLogger callback
+    - Optional TensorBoard callback
+    - Optional RasaModelCheckpoint callback
+
+    Args:
+        epochs: the number of epochs to train
+        tensorboard_log_dir: optional directory that should be used for tensorboard
+        tensorboard_log_level: defines when training metrics for tensorboard should be
+                               logged. Valid values: 'epoch' and 'batch'.
+        checkpoint_dir: optional directory that should be used for model checkpointing
+
+    Returns:
+        A list of callbacks.
+    """
+    callbacks = [RasaTrainingLogger(epochs, silent=False)]
+
+    if tensorboard_log_dir:
+        if tensorboard_log_level == "minibatch":
+            tensorboard_log_level = "batch"
+            rasa.shared.utils.io.raise_warning(
+                "You set 'tensorboard_log_level' to 'minibatch'. This value should not "
+                "be used anymore. Please use 'batch' instead."
+            )
+
+        callbacks.append(
+            tf.keras.callbacks.TensorBoard(
+                log_dir=tensorboard_log_dir,
+                update_freq=tensorboard_log_level,
+                write_graph=True,
+                write_images=True,
+                histogram_freq=10,
+            )
+        )
+
+    if checkpoint_dir:
+        callbacks.append(RasaModelCheckpoint(checkpoint_dir))
+
+    return callbacks
+
+
+def entity_label_to_tags(
+    model_predictions: Dict[Text, Any],
+    entity_tag_specs: List["EntityTagSpec"],
+    bilou_flag: bool = False,
+) -> Tuple[Dict[Text, List[Text]], Dict[Text, List[float]]]:
+    """Convert the output predictions for entities to the actual entity tags.
+
+    Args:
+        model_predictions: the output predictions using the entity tag indices
+        entity_tag_specs: the entity tag specifications
+        bilou_flag: if 'True', the BILOU tagging schema was used
+
+    Returns:
+        A map of entity tag type, e.g. entity, role, group, to actual entity tags and
+        confidences.
+    """
+    predicted_tags = {}
+    confidence_values = {}
+
+    for tag_spec in entity_tag_specs:
+        predictions = model_predictions[f"e_{tag_spec.tag_name}_ids"]
+        confidences = model_predictions[f"e_{tag_spec.tag_name}_scores"]
+
+        if not np.any(predictions):
+            continue
+
+        confidences = [float(c) for c in confidences[0]]
+        tags = [tag_spec.ids_to_tags[p] for p in predictions[0]]
+
+        if bilou_flag:
+            (
+                tags,
+                confidences,
+            ) = rasa.nlu.utils.bilou_utils.ensure_consistent_bilou_tagging(
+                tags, confidences
+            )
+
+        predicted_tags[tag_spec.tag_name] = tags
+        confidence_values[tag_spec.tag_name] = confidences
+
+    return predicted_tags, confidence_values
