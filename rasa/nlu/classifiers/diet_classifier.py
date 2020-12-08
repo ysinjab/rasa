@@ -1459,7 +1459,6 @@ class DIET(TransformerRasaModel):
             self.label_name,
         )
 
-        label_ids.set_shape((None, 1))
         loss, acc = self._calculate_label_loss(sentence_vector, label, label_ids)
 
         self._update_label_metrics(loss, acc)

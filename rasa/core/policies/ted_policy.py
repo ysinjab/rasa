@@ -1564,7 +1564,6 @@ class TED(TransformerRasaModel):
 
         losses = []
 
-        label_ids.set_shape((None, None, 1))
         loss, acc = self._tf_layers[f"loss.{LABEL}"](
             dialogue_embed,
             labels_embed,

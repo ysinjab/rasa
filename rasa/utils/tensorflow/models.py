@@ -56,9 +56,6 @@ from rasa.utils.tensorflow.data_generator import RasaDataGenerator
 logger = logging.getLogger(__name__)
 
 
-TENSORBOARD_LOG_LEVELS = ["epoch", "batch"]
-
-
 # noinspection PyMethodOverriding
 class RasaModel(TmpKerasModel):
     """Completely override all public methods of keras Model.
@@ -312,7 +309,12 @@ class RasaModel(TmpKerasModel):
         pass
 
     def prepare_for_predict(self) -> None:
-        """Prepares the model for prediction."""
+        """Prepares tf graph for prediction.
+
+        This method should contain necessary tf calculations
+        and set self variables that are used in `batch_predict`.
+        For example, pre calculation of `self.all_labels_embed`.
+        """
         pass
 
 
