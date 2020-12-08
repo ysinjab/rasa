@@ -140,8 +140,7 @@ class RasaModel(TmpKerasModel):
     def train_step(
         self, batch_in: Union[Tuple[tf.Tensor], Tuple[np.ndarray]]
     ) -> Dict[Text, float]:
-        """Train on batch"""
-
+        """Train on batch."""
         # calculate supervision and regularization losses separately
         with tf.GradientTape(persistent=True) as tape:
             prediction_loss = self.batch_loss(batch_in)
@@ -179,7 +178,7 @@ class RasaModel(TmpKerasModel):
     def test_step(
         self, batch_in: Union[Tuple[tf.Tensor], Tuple[np.ndarray]]
     ) -> Dict[Text, float]:
-        """Train on batch"""
+        """Train on batch."""
         prediction_loss = self.batch_loss(batch_in)
         regularization_loss = tf.math.add_n(self.losses)
         total_loss = prediction_loss + regularization_loss
@@ -190,11 +189,12 @@ class RasaModel(TmpKerasModel):
     def predict_step(
         self, batch_in: Union[Tuple[tf.Tensor], Tuple[np.ndarray]]
     ) -> Dict[Text, tf.Tensor]:
+        """Predict on batch."""
         self.prepare_for_predict()
         return self.batch_predict(batch_in)
 
     def _get_metric_results(self, prefix: Optional[Text] = None) -> Dict[Text, float]:
-        """Get the metrics results"""
+        """Get the metrics results."""
         prefix = prefix or ""
 
         return {
@@ -204,10 +204,25 @@ class RasaModel(TmpKerasModel):
         }
 
     def save(self, model_file_name: Text, overwrite: bool = True) -> None:
+        """Save the model to the given file.
+
+        Args:
+            model_file_name: The file name to save the model to.
+            overwrite: If 'True' an already existing model with the same file name will
+                       be overwritten.
+        """
         self.save_weights(model_file_name, overwrite=overwrite, save_format="tf")
 
     @classmethod
     def load(cls, model_file_name: Text, *args, **kwargs) -> "RasaModel":
+        """Loads the model from the given file.
+
+        Args:
+            model_file_name: The model file.
+
+        Returns:
+            The loaded Rasa model.
+        """
         logger.debug("Loading the model ...")
         # create empty model
         model = cls(*args, **kwargs)
@@ -288,6 +303,7 @@ class RasaModel(TmpKerasModel):
         pass
 
     def prepare_for_predict(self) -> None:
+        """Prepares the model for prediction."""
         pass
 
 

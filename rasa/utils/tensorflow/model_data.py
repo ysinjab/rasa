@@ -577,7 +577,6 @@ class RasaModelData:
         Returns:
             The shuffled data.
         """
-
         ids = np.random.permutation(self.num_examples)
         return self._data_for_ids(data, ids)
 

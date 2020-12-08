@@ -14,6 +14,12 @@ class RasaTrainingLogger(tf.keras.callbacks.Callback):
     """Callback for logging the status of training."""
 
     def __init__(self, epochs: int, silent: bool) -> None:
+        """Initializes the callback.
+
+        Args:
+            epochs: Total number of epochs.
+            silent: If 'True' the entire progressbar wrapper is disabled.
+        """
         super().__init__()
 
         disable = silent or rasa.shared.utils.io.is_logging_disabled()
