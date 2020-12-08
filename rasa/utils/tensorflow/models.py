@@ -268,11 +268,20 @@ class RasaModel(TmpKerasModel):
                         idx += 3
                     else:
                         if isinstance(batch[idx], tf.Tensor):
+                            if number_of_dimensions > 1 and (
+                                batch[idx].shape is None or batch[idx].shape[-1] is None
+                            ):
+                                shape = [None] * (number_of_dimensions - 1) + [
+                                    feature_dimension
+                                ]
+                                batch[idx].set_shape(shape)
                             batch_data[key][sub_key].append(batch[idx])
                         else:
                             # convert to Tensor
                             batch_data[key][sub_key].append(
-                                tf.constant(batch[idx], dtype=tf.float32)
+                                tf.constant(
+                                    batch[idx], dtype=tf.float32, shape=batch[idx].shape
+                                )
                             )
                         idx += 1
 

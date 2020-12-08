@@ -314,8 +314,8 @@ def entity_label_to_tags(
     confidence_values = {}
 
     for tag_spec in entity_tag_specs:
-        predictions = model_predictions[f"e_{tag_spec.tag_name}_ids"].numpy()
-        confidences = model_predictions[f"e_{tag_spec.tag_name}_scores"].numpy()
+        predictions = model_predictions[f"e_{tag_spec.tag_name}_ids"]
+        confidences = model_predictions[f"e_{tag_spec.tag_name}_scores"]
 
         if not np.any(predictions):
             continue
