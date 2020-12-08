@@ -96,11 +96,7 @@ from rasa.utils.tensorflow.constants import (
     DENSE_DIMENSION,
     MASK,
 )
-from rasa.utils.tensorflow.data_generator import (
-    IncreasingBatchSizeDataGenerator,
-    FixBatchSizeDataGenerator,
-)
-from rasa.utils.tensorflow.callback import RasaTrainingLogger, RasaModelCheckpoint
+from rasa.utils.tensorflow.data_generator import FixBatchSizeDataGenerator
 
 logger = logging.getLogger(__name__)
 

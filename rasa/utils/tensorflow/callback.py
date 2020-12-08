@@ -35,6 +35,14 @@ class RasaTrainingLogger(tf.keras.callbacks.Callback):
         self.progress_bar.update(1)
         self.progress_bar.set_postfix(logs)
 
+    def on_train_end(self, logs: Optional[Dict[Text, Any]] = None) -> None:
+        """Closes the progress bar after training.
+
+        Args:
+            logs: The training metrics.
+        """
+        self.progress_bar.close()
+
 
 class RasaModelCheckpoint(tf.keras.callbacks.Callback):
     """Callback for saving intermediate model checkpoints."""
