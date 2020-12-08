@@ -12,6 +12,9 @@ import tensorflow_addons as tfa
 from typing import Any, List, Optional, Text, Dict, Tuple, Union, TYPE_CHECKING
 
 import rasa.utils.io as io_utils
+import rasa.core.actions.action
+from rasa.nlu.constants import TOKENS_NAMES
+from rasa.nlu.extractors.extractor import EntityExtractor
 from rasa.nlu.classifiers.diet_classifier import EntityTagSpec
 from rasa.shared.core.domain import Domain
 from rasa.core.featurizers.tracker_featurizers import (
@@ -30,6 +33,7 @@ from rasa.shared.nlu.constants import (
     FEATURE_TYPE_SENTENCE,
     ENTITY_ATTRIBUTE_TYPE,
     ENTITY_TAGS,
+    EXTRACTOR,
 )
 from rasa.shared.nlu.interpreter import NaturalLanguageInterpreter
 from rasa.core.policies.policy import Policy, PolicyPrediction
@@ -98,11 +102,10 @@ from rasa.utils.tensorflow.constants import (
     FEATURIZERS,
     ENTITY_RECOGNITION,
 )
-from rasa.utils.tensorflow.callback import RasaModelCheckpoint, RasaTrainingLogger
-from rasa.utils.tensorflow.data_generator import (
-    IncreasingBatchSizeDataGenerator,
-    FixBatchSizeDataGenerator,
-)
+from rasa.utils.tensorflow.data_generator import FixBatchSizeDataGenerator
+from rasa.shared.core.events import DefinePrevUserUtteredEntities, Event
+from rasa.shared.nlu.training_data.message import Message
+
 
 if TYPE_CHECKING:
     from rasa.shared.nlu.training_data.features import Features
@@ -285,7 +288,6 @@ class TEDPolicy(Policy):
         **kwargs: Any,
     ) -> None:
         """Declare instance variables with default values."""
-
         if not featurizer:
             featurizer = self._standard_featurizer(max_history)
 
@@ -324,7 +326,6 @@ class TEDPolicy(Policy):
 
     def _create_entity_tag_specs(self) -> List[EntityTagSpec]:
         """Create entity tag specifications with their respective tag id mappings."""
-
         _tag_specs = []
 
         tag_id_index_mapping = self.featurizer.state_featurizer.get_entity_tag_ids()
@@ -608,9 +609,56 @@ class TEDPolicy(Policy):
         if self.config[LOSS_TYPE] == SOFTMAX and self.config[RANKING_LENGTH] > 0:
             confidence = train_utils.normalize(confidence, self.config[RANKING_LENGTH])
 
-        return self._prediction(
-            confidence.tolist(), is_end_to_end_prediction=is_e2e_prediction
+        optional_events = self._create_optional_event_for_entities(
+            output, interpreter, tracker
         )
+
+        return self._prediction(
+            confidence.tolist(),
+            is_end_to_end_prediction=is_e2e_prediction,
+            optional_events=optional_events,
+        )
+
+    def _create_optional_event_for_entities(
+        self,
+        prediction_output: Dict[Text, tf.Tensor],
+        interpreter: NaturalLanguageInterpreter,
+        tracker: DialogueStateTracker,
+    ) -> Optional[List[Event]]:
+        if tracker.latest_action_name != ACTION_LISTEN_NAME:
+            # entities belong to the last user message
+            # a user message is always followed by action listen
+            return None
+
+        if not self.config[ENTITY_RECOGNITION]:
+            # entity recognition is not turned on, no entities can be predicted
+            return None
+
+        (
+            predicted_tags,
+            confidence_values,
+        ) = rasa.utils.train_utils.entity_label_to_tags(
+            prediction_output, self._entity_tag_specs
+        )
+
+        if ENTITY_ATTRIBUTE_TYPE not in predicted_tags:
+            # no entities detected
+            return None
+
+        # entities belong to the last message of the tracker
+        # convert the predicted tags to actual entities
+        text = tracker.latest_message.text
+        parsed_message = interpreter.featurize_message(Message(data={TEXT: text}))
+        tokens = parsed_message.get(TOKENS_NAMES[TEXT])
+        entities = EntityExtractor.convert_predictions_into_entities(
+            text, tokens, predicted_tags, confidences=confidence_values
+        )
+
+        # add the extractor name
+        for entity in entities:
+            entity[EXTRACTOR] = "TEDPolicy"
+
+        return [DefinePrevUserUtteredEntities(entities)]
 
     def persist(self, path: Union[Text, Path]) -> None:
         """Persists the policy to a storage."""
@@ -663,6 +711,7 @@ class TEDPolicy(Policy):
     @classmethod
     def load(cls, path: Union[Text, Path]) -> "TEDPolicy":
         """Loads a policy from the storage.
+
         **Needs to load its featurizer**
         """
         model_path = Path(path)
@@ -747,6 +796,15 @@ class TED(TransformerRasaModel):
         label_data: RasaModelData,
         entity_tag_specs: Optional[List[EntityTagSpec]],
     ) -> None:
+        """Intializes the TED model.
+
+        Args:
+            data_signature: the data signature of the input data
+            config: the model configuration
+            use_only_last_dialogue_turns: if 'True' only the last dialogue turn will be used
+            label_data: the label data
+            entity_tag_specs: the entity tag specifications
+        """
         super().__init__("TED", config, data_signature, label_data)
 
         self.use_only_last_dialogue_turns = use_only_last_dialogue_turns
@@ -831,9 +889,10 @@ class TED(TransformerRasaModel):
     def _prepare_sparse_dense_layer_for(
         self, name: Text, signature: Dict[Text, Dict[Text, List[FeatureSignature]]]
     ) -> None:
-        """Prepare the sparse dense layer for the given attribute name. It is used to
-        combine the sparse and dense features of the attribute at the beginning of
-        the model.
+        """Prepares the sparse dense layer for the given attribute name.
+
+        It is used to combine the sparse and dense features of the attribute at the
+        beginning of the model.
 
         Args:
             name: the attribute name
@@ -1224,7 +1283,6 @@ class TED(TransformerRasaModel):
         Returns:
             The converted attribute features
         """
-
         # in order to convert the attribute features with shape
         # (combined batch-size and dialogue length x 1 x units)
         # to a shape of (batch-size x dialogue length x units)
