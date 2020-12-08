@@ -402,7 +402,8 @@ async def test_train_tensorboard_logging(component_builder, tmpdir):
     assert tensorboard_log_dir.exists()
 
     all_files = list(tensorboard_log_dir.rglob("*.*"))
-    assert len(all_files) == 3
+    print(all_files)
+    assert len(all_files) == 10
 
 
 async def test_train_model_checkpointing(

@@ -48,6 +48,7 @@ from rasa.core.policies.memoization import AugmentedMemoizationPolicy, Memoizati
 from rasa.core.policies.sklearn_policy import SklearnPolicy
 from rasa.shared.core.trackers import DialogueStateTracker
 from rasa.shared.nlu.training_data.formats.markdown import INTENT
+from rasa.utils.tensorflow.data_generator import FixBatchSizeDataGenerator
 from rasa.utils.tensorflow.constants import (
     SIMILARITY_TYPE,
     RANKING_LENGTH,
@@ -66,7 +67,6 @@ from tests.core.conftest import (
     DEFAULT_STORIES_FILE,
 )
 from tests.core.utilities import get_tracker, read_dialogue_file, user_uttered
-from utils.tensorflow.data_generator import FixBatchSizeDataGenerator
 
 
 async def train_trackers(
