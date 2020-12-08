@@ -59,6 +59,10 @@ from rasa.utils.tensorflow.constants import (
 from rasa.utils.tensorflow import layers
 from rasa.utils.tensorflow.transformer import TransformerEncoder
 from rasa.utils.tensorflow.data_adapter import CustomDataHandler
+from rasa.utils.tensorflow.data_generator import (
+    FixBatchSizeDataGenerator,
+    RasaDataGenerator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -438,7 +442,8 @@ class RasaModel(TmpKerasModel):
         model = cls(*args, **kwargs)
         # need to train on 1 example to build weights of the correct size
         model.compile()
-        model.fit(model_data_example.as_tf_dataset(1), epochs=1, verbose=0)
+        data_generator = FixBatchSizeDataGenerator(model_data_example, batch_size=1)
+        model.fit(data_generator, epochs=1, verbose=0)
         # load trained weights
         model.load_weights(model_file_name)
 
@@ -542,7 +547,7 @@ class TransformerRasaModel(RasaModel):
 
         self._check_data()
 
-        label_batch = label_data.prepare_batch()
+        label_batch = RasaDataGenerator.prepare_batch(label_data.data)
         self.tf_label_data = self.batch_to_model_data_format(
             label_batch, self.label_signature
         )

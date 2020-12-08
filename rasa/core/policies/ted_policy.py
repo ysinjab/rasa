@@ -99,7 +99,10 @@ from rasa.utils.tensorflow.constants import (
     ENTITY_RECOGNITION,
 )
 from rasa.utils.tensorflow.callback import RasaModelCheckpoint, RasaTrainingLogger
-from rasa.utils.tensorflow.data_generator import IncreasingBatchSizeDataGenerator
+from rasa.utils.tensorflow.data_generator import (
+    IncreasingBatchSizeDataGenerator,
+    FixBatchSizeDataGenerator,
+)
 
 if TYPE_CHECKING:
     from rasa.shared.nlu.training_data.features import Features
@@ -591,9 +594,10 @@ class TEDPolicy(Policy):
         )
         model_data = self._create_model_data(tracker_state_features)
 
-        dataset = model_data.as_tf_dataset(batch_size=len(tracker_state_features))
-        self.model.compile()
-        output = self.model.predict(dataset)
+        data_generator = FixBatchSizeDataGenerator(
+            model_data, batch_size=len(tracker_state_features)
+        )
+        output = self.model.predict(data_generator)
 
         # take the last prediction in the sequence
         similarities = output["similarities"][:, -1, :]

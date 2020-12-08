@@ -96,7 +96,10 @@ from rasa.utils.tensorflow.constants import (
     DENSE_DIMENSION,
     MASK,
 )
-from rasa.utils.tensorflow.data_generator import IncreasingBatchSizeDataGenerator
+from rasa.utils.tensorflow.data_generator import (
+    IncreasingBatchSizeDataGenerator,
+    FixBatchSizeDataGenerator,
+)
 from rasa.utils.tensorflow.callback import RasaTrainingLogger, RasaModelCheckpoint
 
 logger = logging.getLogger(__name__)
@@ -844,8 +847,8 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
         # create session data from message and convert it into a batch of 1
         model_data = self._create_model_data([message], training=False)
 
-        dataset = model_data.as_tf_dataset(batch_size=1)
-        return self.model.predict(dataset)
+        data_generator = FixBatchSizeDataGenerator(model_data, batch_size=1)
+        return self.model.predict(data_generator)
 
     def _predict_label(
         self, predict_out: Optional[Dict[Text, tf.Tensor]]
