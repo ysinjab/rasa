@@ -1,3 +1,5 @@
+from typing import Text
+
 import pytest
 
 import scipy.sparse
@@ -8,6 +10,7 @@ from rasa.utils.tensorflow.data_generator import (
     RasaDataGenerator,
     IncreasingBatchSizeDataGenerator,
     FixBatchSizeDataGenerator,
+    FileLoadingDataGenerator,
 )
 
 
@@ -59,6 +62,59 @@ def test_fixed_batch_size_generator(model_data: RasaModelData):
 
     with pytest.raises(StopIteration):
         next(iterator)
+
+
+def test_file_loading_data_generator(model_data: RasaModelData):
+    data_chunks = [
+        {"number_of_examples": 5, "file_path": "chunk1.tfrecord"},
+        {"number_of_examples": 2, "file_path": "chunk2.tfrecord"},
+        {"number_of_examples": 4, "file_path": "chunk3.tfrecord"},
+        {"number_of_examples": 3, "file_path": "chunk4.tfrecord"},
+        {"number_of_examples": 4, "file_path": "chunk5.tfrecord"},
+    ]
+
+    data_generator = FileLoadingDataGenerator(
+        data_chunks, lambda x: RasaModelData(), batch_size=2
+    )
+
+    iterator = iter(data_generator)
+
+    assert len(data_generator) == 10
+
+    for i in range(len(data_generator)):
+        batch, _ = next(iterator)
+
+    with pytest.raises(StopIteration):
+        next(iterator)
+
+
+@pytest.mark.parametrize(
+    "start, end, expected_file_path, expected_examples_processed_so_far",
+    [
+        (4, 6, "chunk1.tfrecord", 0),
+        (0, 2, "chunk1.tfrecord", 0),
+        (6, 8, "chunk2.tfrecord", 5),
+    ],
+)
+def test_file_path_to_load(
+    start: int,
+    end: int,
+    expected_file_path: Text,
+    expected_examples_processed_so_far: int,
+):
+    data_chunks = [
+        {"number_of_examples": 5, "file_path": "chunk1.tfrecord"},
+        {"number_of_examples": 2, "file_path": "chunk2.tfrecord"},
+    ]
+
+    data_generator = FileLoadingDataGenerator(
+        data_chunks, lambda x: RasaModelData(), batch_size=2, shuffle=False
+    )
+
+    file_path, examples_processed_so_far = data_generator._file_path_to_load(start, end)
+
+    assert file_path == expected_file_path
+    assert examples_processed_so_far == expected_examples_processed_so_far
 
 
 @pytest.mark.parametrize(

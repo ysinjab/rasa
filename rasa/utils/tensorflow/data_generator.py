@@ -1,4 +1,5 @@
-from typing import List, Union, Text, Optional, Any, Tuple, Dict
+import random
+from typing import List, Union, Text, Optional, Any, Tuple, Dict, Callable
 
 import scipy.sparse
 import numpy as np
@@ -7,6 +8,7 @@ import tensorflow as tf
 import rasa.shared.utils.io
 from rasa.utils.tensorflow.constants import SEQUENCE, BALANCED
 from rasa.utils.tensorflow.model_data import RasaModelData, Data, FeatureArray
+from rasa.shared.exceptions import RasaTrainChunkException
 
 
 class RasaDataGenerator(tf.keras.utils.Sequence):
@@ -14,7 +16,7 @@ class RasaDataGenerator(tf.keras.utils.Sequence):
 
     def __init__(
         self,
-        model_data: RasaModelData,
+        model_data: Optional[RasaModelData],
         batch_size: Union[int, List[int]],
         epochs: int,
         batch_strategy: Text = SEQUENCE,
@@ -473,3 +475,98 @@ class FixBatchSizeDataGenerator(RasaDataGenerator):
     def on_epoch_end(self) -> None:
         """Update the data after every epoch."""
         self._shuffle_and_balance(self.batch_size)
+
+
+class FileLoadingDataGenerator(RasaDataGenerator):
+    """Data generator with a fixed batch size."""
+
+    def __init__(
+        self,
+        data_chunks: List[Dict[Text, Union[Text, int]]],
+        load_data_func: Callable[[Text], RasaModelData],
+        batch_size: int,
+        epochs: int = 1,
+        batch_strategy: Text = SEQUENCE,
+        shuffle: bool = True,
+    ):
+        """Initializes the increasing batch size data generator.
+
+        Args:
+            data_chunks: List of data chunks. A data chunk has a file path and the
+                         number of examples in that file.
+            load_data_func: Function to load data from a file.
+            batch_size: The batch size.
+            epochs: The total number of epochs.
+            batch_strategy: The batch strategy.
+            shuffle: If 'Ture', data will be shuffled.
+        """
+        self.data_chunks = data_chunks
+        self.load_data_func = load_data_func
+
+        super().__init__(None, batch_size, epochs, batch_strategy, shuffle)
+
+    def __len__(self) -> int:
+        """Number of batches in the Sequence.
+
+        Returns:
+            The number of batches in the Sequence.
+        """
+
+        def _len(number_of_examples: int, batch_size: int) -> int:
+            return number_of_examples // batch_size + int(
+                number_of_examples % batch_size > 0
+            )
+
+        return sum(
+            [
+                _len(data_chunk["number_of_examples"], self.batch_size)
+                for data_chunk in self.data_chunks
+            ]
+        )
+
+    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+        """Gets batch at position `index`.
+
+        Arguments:
+            index: position of the batch in the Sequence.
+
+        Returns:
+            A batch (tuple of input data and target data).
+        """
+        start = index * self.batch_size
+        end = start + self.batch_size
+
+        # determine what file to load
+        file_path, examples_processed_so_far = self._file_path_to_load(start, end)
+        # load actual data
+        model_data = self.load_data_func(file_path)
+
+        start -= examples_processed_so_far
+        end -= examples_processed_so_far
+
+        return self.prepare_batch(model_data.data, start, end), None
+
+    def on_epoch_end(self) -> None:
+        """Update the data after every epoch."""
+        if self.shuffle:
+            random.shuffle(self.data_chunks)
+
+    def _file_path_to_load(self, start: int, end: int) -> Tuple[Text, int]:
+        number_of_examples = [
+            data_chunk["number_of_examples"] for data_chunk in self.data_chunks
+        ]
+        cumsum_examples = np.cumsum(number_of_examples)
+
+        file_path = self.data_chunks[-1]["file_path"]
+        data_chunk_index = -1
+        for idx in range(len(cumsum_examples) - 1):
+            if start <= cumsum_examples[idx] and end <= cumsum_examples[idx + 1]:
+                file_path = self.data_chunks[idx]["file_path"]
+                data_chunk_index = idx
+                break
+
+        examples_processed_so_far = (
+            cumsum_examples[data_chunk_index] - number_of_examples[data_chunk_index]
+        )
+
+        return file_path, examples_processed_so_far
