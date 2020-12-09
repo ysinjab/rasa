@@ -789,6 +789,7 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
             return
 
         def _load_data_func(file_path: Path) -> RasaModelData:
+            logger.debug(f"Loading training data chunk '{file_path}'.")
             training_data_chunk = TrainingDataChunk.load_chunk(file_path)
             return self.preprocess_train_data(training_data_chunk)
 

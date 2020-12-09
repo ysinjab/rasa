@@ -267,13 +267,20 @@ class Trainer:
         # perform tokenization & prepare other components for training in chunks
         for i, component in enumerate(self.pipeline):
             if isinstance(component, (SpacyNLP, MitieNLP, Tokenizer)):
+                logger.info(f"Starting to train component {component.name}.")
                 component.train(working_training_data, self.config, **context)
                 metadata["pipeline"].append(
                     self._persist_component(component, dir_name, i)
                 )
+                logger.info(f"Finished training component {component.name}.")
             else:
+                logger.info(
+                    f"Starting to prepare training for component {component.name}."
+                )
                 component.prepare_partial_training(working_training_data)
+                logger.info(f"Finished preparation for component {component.name}.")
 
+        logger.info(f"Divide training data into {number_of_chunks} chunks.")
         training_data_chunks = working_training_data.divide_into_chunks(
             number_of_chunks
         )
@@ -281,14 +288,19 @@ class Trainer:
 
         # perform featurization
         for i, data_chunk in enumerate(training_data_chunks):
+            logger.info(f"Starting to train all featurizers on chunk {i}.")
             for component in self.pipeline:
                 if isinstance(component, Featurizer):
                     component.train_chunk(data_chunk, self.config, **context)
+            logger.info(f"Finished training featurizers on chunk {i}.")
             data_chunk_file = data_chunk.persist_chunk(
                 data_chunk_dir, f"{i}_chunk.tfrecord"
             )
             data_chunk_files.append(
                 DataChunkFile(Path(data_chunk_file), len(data_chunk.training_examples))
+            )
+            logger.info(
+                f"Chunk {i} contains {len(data_chunk.training_examples)} examples and was persisted to '{data_chunk_file}'."
             )
 
         # persist featurizers
@@ -301,11 +313,14 @@ class Trainer:
         # train classifiers / entity extractors
         for i, component in enumerate(self.pipeline):
             if isinstance(component, (IntentClassifier, EntityExtractor)):
-                for j in range(number_of_chunks):
-                    component.train_chunk(data_chunk_files, self.config, **context)
+                logger.info(
+                    f"Starting to train component {component.name} on all chunks."
+                )
+                component.train_chunk(data_chunk_files, self.config, **context)
                 metadata["pipeline"].append(
                     self._persist_component(component, dir_name, i)
                 )
+                logger.info(f"Finished training of component {component.name}.")
 
         Metadata(metadata, dir_name).persist(dir_name)
 

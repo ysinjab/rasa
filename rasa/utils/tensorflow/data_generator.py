@@ -512,6 +512,14 @@ class DataChunkGenerator(RasaDataGenerator):
             batch_strategy: The batch strategy.
             shuffle: If 'Ture', data will be shuffled.
         """
+        if isinstance(batch_size, list):
+            rasa.shared.utils.io.raise_warning(
+                f"'DataChunkGenerator' should only be used with a "
+                f"fixed batch size, but '{batch_size}' given. Use "
+                f"batch size of {batch_size[0]} instead."
+            )
+            batch_size = batch_size[0]
+
         self.data_chunks = data_chunks
         self.load_data_func = load_data_func
 
