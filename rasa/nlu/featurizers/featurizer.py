@@ -9,6 +9,8 @@ from rasa.shared.nlu.training_data.training_data import TrainingDataChunk, Train
 
 
 class Featurizer(Component):
+    """Abstract featurizer component."""
+
     def __init__(self, component_config: Optional[Dict[Text, Any]] = None) -> None:
         if not component_config:
             component_config = {}

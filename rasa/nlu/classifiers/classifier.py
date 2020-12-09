@@ -6,6 +6,8 @@ from rasa.utils.tensorflow.data_generator import DataChunkFile
 
 
 class IntentClassifier(Component):
+    """Intent classifier component."""
+
     def train_chunk(
         self,
         data_chunk_files: List[DataChunkFile],

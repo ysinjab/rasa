@@ -96,7 +96,10 @@ from rasa.utils.tensorflow.constants import (
     DENSE_DIMENSION,
     MASK,
 )
-from rasa.utils.tensorflow.data_generator import FixBatchSizeDataGenerator
+from rasa.utils.tensorflow.data_generator import (
+    FixBatchSizeDataGenerator,
+    DataChunkFile,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -635,7 +638,7 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
         label_attribute: Optional[Text] = None,
         training: bool = True,
     ) -> RasaModelData:
-        """Prepare data for training and create a RasaModelData object"""
+        """Prepare data for training and create a RasaModelData object."""
         from rasa.utils.tensorflow import model_data_utils
 
         attributes_to_consider = [TEXT]
@@ -768,6 +771,20 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
     @staticmethod
     def _check_enough_labels(model_data: RasaModelData) -> bool:
         return len(np.unique(model_data.get(LABEL_KEY, LABEL_SUB_KEY))) >= 2
+
+    def train_chunk(
+        self,
+        data_chunk_files: List[DataChunkFile],
+        config: Optional[RasaNLUModelConfig] = None,
+        **kwargs: Any,
+    ) -> None:
+        """Trains this component using the list of data chunk files.
+
+        Args:
+            data_chunk_files: List of data chunk files.
+            config: The model configuration parameters.
+        """
+        pass
 
     def train(
         self,

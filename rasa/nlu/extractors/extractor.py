@@ -33,6 +33,8 @@ from rasa.utils.tensorflow.data_generator import DataChunkFile
 
 
 class EntityExtractor(Component):
+    """Abstract entity extractor component."""
+
     def train_chunk(
         self,
         data_chunk_files: List[DataChunkFile],
@@ -50,6 +52,14 @@ class EntityExtractor(Component):
     def add_extractor_name(
         self, entities: List[Dict[Text, Any]]
     ) -> List[Dict[Text, Any]]:
+        """Adds the name of this extractor to each given entity.
+
+        Args:
+            entities: List of entities.
+
+        Returns:
+            Updated list of entities
+        """
         for entity in entities:
             entity[EXTRACTOR] = self.name
         return entities
@@ -122,7 +132,6 @@ class EntityExtractor(Component):
         `extractor` set to something other than
         self.name (e.g. 'CRFEntityExtractor') are removed.
         """
-
         filtered = []
         for message in entity_examples:
             entities = []

@@ -22,8 +22,11 @@ from rasa.utils.tensorflow.data_generator import DataChunkFile
 
 
 class EntitySynonymMapper(EntityExtractor):
+    """Maps synonymous entity values to the same value."""
+
     @classmethod
     def required_components(cls) -> List[Type[Component]]:
+        """Specifies which components need to be present in the pipeline."""
         return [EntityExtractor]
 
     def __init__(
@@ -47,7 +50,7 @@ class EntitySynonymMapper(EntityExtractor):
         See parent class for more information.
         """
         for key, value in list(training_data.entity_synonyms.items()):
-            self.add_entities_if_synonyms(key, value)
+            self._add_entities_if_synonyms(key, value)
 
     def train(
         self,
@@ -79,7 +82,7 @@ class EntitySynonymMapper(EntityExtractor):
                 entity_val = example.get(TEXT)[
                     entity[ENTITY_ATTRIBUTE_START] : entity[ENTITY_ATTRIBUTE_END]
                 ]
-                self.add_entities_if_synonyms(
+                self._add_entities_if_synonyms(
                     entity_val, str(entity.get(ENTITY_ATTRIBUTE_VALUE))
                 )
 
@@ -127,7 +130,7 @@ class EntitySynonymMapper(EntityExtractor):
             )
         return cls(meta, synonyms=synonyms)
 
-    def _replace_synonyms(self, entities) -> None:
+    def _replace_synonyms(self, entities: List[Dict[Text, Any]]) -> None:
         for entity in entities:
             # need to wrap in `str` to handle e.g. entity values of type int
             entity_value = str(entity[ENTITY_ATTRIBUTE_VALUE])
@@ -135,7 +138,9 @@ class EntitySynonymMapper(EntityExtractor):
                 entity[ENTITY_ATTRIBUTE_VALUE] = self.synonyms[entity_value.lower()]
                 self.add_processor_name(entity)
 
-    def add_entities_if_synonyms(self, entity_a, entity_b) -> None:
+    def _add_entities_if_synonyms(
+        self, entity_a: Optional[Text], entity_b: Optional[Text]
+    ) -> None:
         if entity_b is not None:
             original = str(entity_a)
             replacement = str(entity_b)
