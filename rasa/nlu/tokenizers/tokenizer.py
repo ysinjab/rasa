@@ -41,6 +41,16 @@ class Token:
     def get(self, prop: Text, default: Optional[Any] = None) -> Any:
         return self.data.get(prop, default)
 
+    @classmethod
+    def from_dict(cls, dict: Dict[Text, Any]):
+        return Token(
+            dict["text"],
+            dict["start"],
+            dict["end"] if "end" in dict else None,
+            dict["data"] if "data" in dict else None,
+            dict["lemma"] if "lemma" in dict else None,
+        )
+
     def __eq__(self, other):
         if not isinstance(other, Token):
             return NotImplemented
