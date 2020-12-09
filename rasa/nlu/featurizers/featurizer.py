@@ -1,9 +1,11 @@
 import numpy as np
 from typing import Text, Optional, Dict, Any
 
+from rasa.nlu.config import RasaNLUModelConfig
 from rasa.nlu.constants import FEATURIZER_CLASS_ALIAS
 from rasa.nlu.components import Component
 from rasa.utils.tensorflow.constants import MEAN_POOLING, MAX_POOLING
+from rasa.shared.nlu.training_data.training_data import TrainingDataChunk, TrainingData
 
 
 class Featurizer(Component):
@@ -15,6 +17,29 @@ class Featurizer(Component):
         component_config.setdefault(FEATURIZER_CLASS_ALIAS, self.name)
 
         super().__init__(component_config)
+
+    def train(
+        self,
+        training_data: TrainingData,
+        config: Optional[RasaNLUModelConfig] = None,
+        **kwargs: Any,
+    ) -> None:
+        """Train this component."""
+        self.prepare_partial_training(training_data, config, **kwargs)
+        training_data_chunk = TrainingDataChunk(
+            training_examples=training_data.training_examples,
+            responses=training_data.responses,
+        )
+        self.train_chunk(training_data_chunk, config, **kwargs)
+
+    def train_chunk(
+        self,
+        training_data_chunk: TrainingDataChunk,
+        config: Optional[RasaNLUModelConfig] = None,
+        **kwargs: Any,
+    ) -> None:
+        """Train this component on the given chunk."""
+        pass
 
 
 class DenseFeaturizer(Featurizer):

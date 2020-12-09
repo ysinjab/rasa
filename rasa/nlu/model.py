@@ -2,7 +2,6 @@ import copy
 import datetime
 import logging
 import os
-from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Text, Tuple
 
@@ -32,6 +31,7 @@ from rasa.shared.nlu.training_data.message import Message
 from rasa.nlu.utils import write_json_to_file
 from rasa.utils.common import TempDirectoryPath
 from rasa.shared.core.domain import Domain
+from rasa.utils.tensorflow.data_generator import DataChunkFile
 
 logger = logging.getLogger(__name__)
 
@@ -275,13 +275,19 @@ class Trainer:
         training_data_chunks = working_training_data.divide_into_chunks(
             number_of_chunks
         )
+        data_chunk_files = []
 
         # perform featurization
         for i, data_chunk in enumerate(training_data_chunks):
             for component in self.pipeline:
                 if isinstance(component, Featurizer):
                     component.train_chunk(data_chunk, self.config, **context)
-            data_chunk.persist_chunk(data_chunk_dir, f"{i}_chunk.tfrecord")
+            data_chunk_file = data_chunk.persist_chunk(
+                data_chunk_dir, f"{i}_chunk.tfrecord"
+            )
+            data_chunk_files.append(
+                DataChunkFile(Path(data_chunk_file), len(data_chunk.training_examples))
+            )
 
         # persist featurizers
         for i, component in enumerate(self.pipeline):
@@ -290,13 +296,11 @@ class Trainer:
                     self._persist_component(component, dir_name, i)
                 )
 
-        # TODO training of classifiers probably needs to be adapted
+        # train classifiers / entity extractors
         for i, component in enumerate(self.pipeline):
             if isinstance(component, (IntentClassifier, EntityExtractor)):
                 for j in range(number_of_chunks):
-                    file_path = os.path.join(data_chunk_dir, f"{j}_chunk.tfrecord")
-                    data_chunk = TrainingDataChunk.load_chunk(file_path)
-                    component.train_chunk(data_chunk, self.config, **context)
+                    component.train_chunk(data_chunk_files, self.config, **context)
                 metadata["pipeline"].append(
                     self._persist_component(component, dir_name, i)
                 )

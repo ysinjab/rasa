@@ -863,7 +863,7 @@ class TrainingDataChunk(TrainingData):
         return file_path
 
     @classmethod
-    def load_chunk(cls, file_path: Text) -> "TrainingDataChunk":
+    def load_chunk(cls, file_path: Union[Text, Path]) -> "TrainingDataChunk":
         """Loads a training data chunk from the given TFRecord file path.
 
         Args:

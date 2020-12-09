@@ -3,7 +3,13 @@ from typing import Any, Dict, List, Optional, Text, Type
 
 from rasa.nlu.components import Component
 from rasa.shared.constants import DOCS_URL_TRAINING_DATA
-from rasa.shared.nlu.constants import ENTITIES, TEXT
+from rasa.shared.nlu.constants import (
+    ENTITIES,
+    TEXT,
+    ENTITY_ATTRIBUTE_START,
+    ENTITY_ATTRIBUTE_END,
+    ENTITY_ATTRIBUTE_VALUE,
+)
 from rasa.nlu.config import RasaNLUModelConfig
 from rasa.nlu.extractors.extractor import EntityExtractor
 from rasa.nlu.model import Metadata
@@ -12,6 +18,7 @@ from rasa.shared.nlu.training_data.message import Message
 from rasa.nlu.utils import write_json_to_file
 import rasa.utils.io
 import rasa.shared.utils.io
+from rasa.utils.tensorflow.data_generator import DataChunkFile
 
 
 class EntitySynonymMapper(EntityExtractor):
@@ -42,9 +49,19 @@ class EntitySynonymMapper(EntityExtractor):
         for key, value in list(training_data.entity_synonyms.items()):
             self.add_entities_if_synonyms(key, value)
 
+    def train(
+        self,
+        training_data: TrainingData,
+        config: Optional[RasaNLUModelConfig] = None,
+        **kwargs: Any,
+    ) -> None:
+        """Train this component."""
+        self.prepare_partial_training(training_data, config, **kwargs)
+        self._process_entity_examples(training_data.entity_synonyms)
+
     def train_chunk(
         self,
-        training_data_chunk: TrainingDataChunk,
+        data_chunk_files: List[DataChunkFile],
         config: Optional[RasaNLUModelConfig] = None,
         **kwargs: Any,
     ) -> None:
@@ -52,10 +69,19 @@ class EntitySynonymMapper(EntityExtractor):
 
         See parent class for more information.
         """
-        for example in training_data_chunk.entity_examples:
+        for data_chunk in data_chunk_files:
+            training_data_chunk = TrainingDataChunk.load_chunk(data_chunk.file_path)
+            self._process_entity_examples(training_data_chunk.entity_examples)
+
+    def _process_entity_examples(self, entity_examples: List[Message]) -> None:
+        for example in entity_examples:
             for entity in example.get(ENTITIES, []):
-                entity_val = example.get(TEXT)[entity["start"] : entity["end"]]
-                self.add_entities_if_synonyms(entity_val, str(entity.get("value")))
+                entity_val = example.get(TEXT)[
+                    entity[ENTITY_ATTRIBUTE_START] : entity[ENTITY_ATTRIBUTE_END]
+                ]
+                self.add_entities_if_synonyms(
+                    entity_val, str(entity.get(ENTITY_ATTRIBUTE_VALUE))
+                )
 
     def process(self, message: Message, **kwargs: Any) -> None:
         """Process an incoming message."""
@@ -104,9 +130,9 @@ class EntitySynonymMapper(EntityExtractor):
     def _replace_synonyms(self, entities) -> None:
         for entity in entities:
             # need to wrap in `str` to handle e.g. entity values of type int
-            entity_value = str(entity["value"])
+            entity_value = str(entity[ENTITY_ATTRIBUTE_VALUE])
             if entity_value.lower() in self.synonyms:
-                entity["value"] = self.synonyms[entity_value.lower()]
+                entity[ENTITY_ATTRIBUTE_VALUE] = self.synonyms[entity_value.lower()]
                 self.add_processor_name(entity)
 
     def add_entities_if_synonyms(self, entity_a, entity_b) -> None:
