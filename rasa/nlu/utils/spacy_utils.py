@@ -4,9 +4,8 @@ from typing import Any, Dict, List, Optional, Text, Tuple
 
 from rasa.nlu.components import Component
 from rasa.nlu.config import RasaNLUModelConfig, override_defaults
-from rasa.shared.nlu.training_data.training_data import TrainingDataChunk, TrainingData
+from rasa.shared.nlu.training_data.training_data import TrainingData
 from rasa.shared.nlu.training_data.message import Message
-from rasa.nlu.model import InvalidModelError
 from rasa.nlu.constants import SPACY_DOCS, DENSE_FEATURIZABLE_ATTRIBUTES
 from rasa.shared.core.domain import Domain
 
@@ -15,7 +14,7 @@ logger = logging.getLogger(__name__)
 if typing.TYPE_CHECKING:
     from spacy.language import Language
     from spacy.tokens.doc import Doc
-    from rasa.nlu.model import Metadata
+    from rasa.nlu.model import Metadata, InvalidModelError
 
 
 class SpacyNLP(Component):

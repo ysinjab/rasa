@@ -4,11 +4,11 @@ from typing import Any, Dict, List, Optional, Text
 
 from rasa.nlu.components import Component
 from rasa.nlu.config import RasaNLUModelConfig, override_defaults
-from rasa.nlu.model import Metadata
 from rasa.shared.core.domain import Domain
 
 if typing.TYPE_CHECKING:
     import mitie
+    from rasa.nlu.model import Metadata
 
 
 class MitieNLP(Component):
@@ -93,7 +93,7 @@ class MitieNLP(Component):
         cls,
         meta: Dict[Text, Any],
         model_dir: Optional[Text] = None,
-        model_metadata: Optional[Metadata] = None,
+        model_metadata: Optional["Metadata"] = None,
         cached_component: Optional["MitieNLP"] = None,
         **kwargs: Any,
     ) -> "MitieNLP":

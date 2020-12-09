@@ -772,7 +772,7 @@ class TrainingDataChunk(TrainingData):
 
     @staticmethod
     def _bytes_feature(array: np.ndarray) -> tf.train.Feature:
-        value = tf.io.serialize_tensor(array)
+        value = tf.io.serialize_tensor(array.astype(np.float64))
         if isinstance(value, type(tf.constant(0))):
             value = value.numpy()
         return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
@@ -817,7 +817,7 @@ class TrainingDataChunk(TrainingData):
             if feature.is_dense():
                 tf_features[key] = self._bytes_feature(feature.features)
             else:
-                data = feature.features.data
+                data = feature.features.data.astype(np.int64)
                 shape = feature.features.shape
                 row = feature.features.row
                 column = feature.features.col
@@ -873,6 +873,9 @@ class TrainingDataChunk(TrainingData):
             The loaded training data chunk.
         """
         training_examples = []
+
+        if isinstance(file_path, Path):
+            file_path = str(file_path.absolute())
 
         raw_dataset = tf.data.TFRecordDataset([file_path])
         for raw_record in raw_dataset:

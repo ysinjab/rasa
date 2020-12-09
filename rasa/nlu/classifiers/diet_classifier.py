@@ -40,7 +40,7 @@ from rasa.shared.nlu.constants import (
 )
 from rasa.nlu.config import RasaNLUModelConfig
 from rasa.shared.exceptions import InvalidConfigException
-from rasa.shared.nlu.training_data.training_data import TrainingData
+from rasa.shared.nlu.training_data.training_data import TrainingData, TrainingDataChunk
 from rasa.shared.nlu.training_data.message import Message
 from rasa.nlu.model import Metadata
 from rasa.utils.tensorflow.constants import (
@@ -99,6 +99,7 @@ from rasa.utils.tensorflow.constants import (
 from rasa.utils.tensorflow.data_generator import (
     FixBatchSizeDataGenerator,
     DataChunkFile,
+    DataChunkGenerator,
 )
 
 logger = logging.getLogger(__name__)
@@ -784,7 +785,44 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
             data_chunk_files: List of data chunk files.
             config: The model configuration parameters.
         """
-        pass
+        if not data_chunk_files:
+            return
+
+        def _load_data_func(file_path: Path) -> RasaModelData:
+            training_data_chunk = TrainingDataChunk.load_chunk(file_path)
+            return self.preprocess_train_data(training_data_chunk)
+
+        # load one chunk so that we can instantiate the model
+        model_data = _load_data_func(data_chunk_files[0].file_path)
+
+        # keep one example for persisting and loading
+        self._data_example = model_data.first_data_example()
+
+        self.model = self._instantiate_model_class(model_data)
+
+        data_generator = DataChunkGenerator(
+            data_chunk_files,
+            _load_data_func,
+            batch_size=self.component_config[BATCH_SIZES],
+            epochs=self.component_config[EPOCHS],
+            batch_strategy=self.component_config[BATCH_STRATEGY],
+            shuffle=True,
+        )
+
+        callbacks = train_utils.create_common_callbacks(
+            self.component_config[EPOCHS],
+            self.component_config[TENSORBOARD_LOG_DIR],
+            self.component_config[TENSORBOARD_LOG_LEVEL],
+            self.tmp_checkpoint_dir,
+        )
+
+        self.model.compile()
+        self.model.fit(
+            data_generator,
+            epochs=self.component_config[EPOCHS],
+            callbacks=callbacks,
+            verbose=False,
+        )
 
     def train(
         self,
