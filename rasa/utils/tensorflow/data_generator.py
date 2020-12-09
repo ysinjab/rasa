@@ -1,5 +1,6 @@
 import random
-from typing import List, Union, Text, Optional, Any, Tuple, Dict, Callable
+from pathlib import Path
+from typing import List, Union, Text, Optional, Any, Tuple, Dict, Callable, NamedTuple
 
 import scipy.sparse
 import numpy as np
@@ -477,13 +478,24 @@ class FixBatchSizeDataGenerator(RasaDataGenerator):
         self._shuffle_and_balance(self.batch_size)
 
 
-class FileLoadingDataGenerator(RasaDataGenerator):
-    """Data generator with a fixed batch size."""
+class DataChunkFile(NamedTuple):
+    """Representation of a data chunk file.
+
+    Stores the file path to the data chunk file as well as the number of examples
+    in that file.
+    """
+
+    file_path: Path
+    number_of_examples: int
+
+
+class DataChunkGenerator(RasaDataGenerator):
+    """Data generator for data chunks with a fixed batch size."""
 
     def __init__(
         self,
-        data_chunks: List[Dict[Text, Union[Text, int]]],
-        load_data_func: Callable[[Text], RasaModelData],
+        data_chunks: List[DataChunkFile],
+        load_data_func: Callable[[Path], RasaModelData],
         batch_size: int,
         epochs: int = 1,
         batch_strategy: Text = SEQUENCE,
@@ -519,7 +531,7 @@ class FileLoadingDataGenerator(RasaDataGenerator):
 
         return sum(
             [
-                _len(data_chunk["number_of_examples"], self.batch_size)
+                _len(data_chunk.number_of_examples, self.batch_size)
                 for data_chunk in self.data_chunks
             ]
         )
@@ -551,17 +563,17 @@ class FileLoadingDataGenerator(RasaDataGenerator):
         if self.shuffle:
             random.shuffle(self.data_chunks)
 
-    def _file_path_to_load(self, start: int, end: int) -> Tuple[Text, int]:
+    def _file_path_to_load(self, start: int, end: int) -> Tuple[Path, int]:
         number_of_examples = [
-            data_chunk["number_of_examples"] for data_chunk in self.data_chunks
+            data_chunk.number_of_examples for data_chunk in self.data_chunks
         ]
         cumsum_examples = np.cumsum(number_of_examples)
 
-        file_path = self.data_chunks[-1]["file_path"]
+        file_path = self.data_chunks[-1].file_path
         data_chunk_index = -1
         for idx in range(len(cumsum_examples) - 1):
             if start <= cumsum_examples[idx] and end <= cumsum_examples[idx + 1]:
-                file_path = self.data_chunks[idx]["file_path"]
+                file_path = self.data_chunks[idx].file_path
                 data_chunk_index = idx
                 break
 

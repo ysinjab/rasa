@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Text
 
 import pytest
@@ -10,7 +11,8 @@ from rasa.utils.tensorflow.data_generator import (
     RasaDataGenerator,
     IncreasingBatchSizeDataGenerator,
     FixBatchSizeDataGenerator,
-    FileLoadingDataGenerator,
+    DataChunkGenerator,
+    DataChunkFile,
 )
 
 
@@ -66,14 +68,14 @@ def test_fixed_batch_size_generator(model_data: RasaModelData):
 
 def test_file_loading_data_generator(model_data: RasaModelData):
     data_chunks = [
-        {"number_of_examples": 5, "file_path": "chunk1.tfrecord"},
-        {"number_of_examples": 2, "file_path": "chunk2.tfrecord"},
-        {"number_of_examples": 4, "file_path": "chunk3.tfrecord"},
-        {"number_of_examples": 3, "file_path": "chunk4.tfrecord"},
-        {"number_of_examples": 4, "file_path": "chunk5.tfrecord"},
+        DataChunkFile(Path("chunk1.tfrecord"), 5),
+        DataChunkFile(Path("chunk2.tfrecord"), 2),
+        DataChunkFile(Path("chunk3.tfrecord"), 4),
+        DataChunkFile(Path("chunk4.tfrecord"), 3),
+        DataChunkFile(Path("chunk5.tfrecord"), 4),
     ]
 
-    data_generator = FileLoadingDataGenerator(
+    data_generator = DataChunkGenerator(
         data_chunks, lambda x: RasaModelData(), batch_size=2
     )
 
@@ -103,17 +105,17 @@ def test_file_path_to_load(
     expected_examples_processed_so_far: int,
 ):
     data_chunks = [
-        {"number_of_examples": 5, "file_path": "chunk1.tfrecord"},
-        {"number_of_examples": 2, "file_path": "chunk2.tfrecord"},
+        DataChunkFile(Path("chunk1.tfrecord"), 5),
+        DataChunkFile(Path("chunk2.tfrecord"), 2),
     ]
 
-    data_generator = FileLoadingDataGenerator(
+    data_generator = DataChunkGenerator(
         data_chunks, lambda x: RasaModelData(), batch_size=2, shuffle=False
     )
 
     file_path, examples_processed_so_far = data_generator._file_path_to_load(start, end)
 
-    assert file_path == expected_file_path
+    assert str(file_path) == expected_file_path
     assert examples_processed_so_far == expected_examples_processed_so_far
 
 
