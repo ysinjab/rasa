@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Text, Tuple
 
 import rasa.nlu
+from rasa.nlu.utils.mitie_utils import MitieNLP
+from rasa.nlu.utils.spacy_utils import SpacyNLP
 from rasa.nlu.featurizers.featurizer import Featurizer
 from rasa.nlu.tokenizers.tokenizer import Tokenizer
 from rasa.shared.exceptions import RasaException
@@ -26,7 +28,7 @@ from rasa.shared.nlu.constants import (
     INTENT_NAME_KEY,
     PREDICTED_CONFIDENCE_KEY,
 )
-from rasa.shared.nlu.training_data.training_data import TrainingData, TrainingDataChunk
+from rasa.shared.nlu.training_data.training_data import TrainingData
 from rasa.shared.nlu.training_data.message import Message
 from rasa.nlu.utils import write_json_to_file
 from rasa.utils.common import TempDirectoryPath
@@ -264,7 +266,7 @@ class Trainer:
 
         # perform tokenization & prepare other components for training in chunks
         for i, component in enumerate(self.pipeline):
-            if isinstance(component, Tokenizer):
+            if isinstance(component, (SpacyNLP, MitieNLP, Tokenizer)):
                 component.train(working_training_data, self.config, **context)
                 metadata["pipeline"].append(
                     self._persist_component(component, dir_name, i)

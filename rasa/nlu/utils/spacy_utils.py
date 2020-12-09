@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Text, Tuple
 
 from rasa.nlu.components import Component
 from rasa.nlu.config import RasaNLUModelConfig, override_defaults
-from rasa.shared.nlu.training_data.training_data import TrainingDataChunk
+from rasa.shared.nlu.training_data.training_data import TrainingDataChunk, TrainingData
 from rasa.shared.nlu.training_data.message import Message
 from rasa.nlu.model import InvalidModelError
 from rasa.nlu.constants import SPACY_DOCS, DENSE_FEATURIZABLE_ATTRIBUTES
@@ -220,21 +220,20 @@ class SpacyNLP(Component):
             attribute_docs[attribute] = [doc for _, doc in attribute_document_list]
         return attribute_docs
 
-    def train_chunk(
+    def train(
         self,
-        training_data_chunk: TrainingDataChunk,
+        training_data: TrainingData,
         config: Optional[RasaNLUModelConfig] = None,
         **kwargs: Any,
     ) -> None:
-        """Train this component on the given chunk.
 
-        See parent class for more information.
-        """
         attribute_docs = self._docs_for_training_examples(
-            training_data_chunk.training_examples
+            training_data.training_examples
         )
+
         for attribute in DENSE_FEATURIZABLE_ATTRIBUTES:
-            for idx, example in enumerate(training_data_chunk.training_examples):
+
+            for idx, example in enumerate(training_data.training_examples):
                 example_attribute_doc = attribute_docs[attribute][idx]
                 if len(example_attribute_doc):
                     # If length is 0, that means the initial text feature
