@@ -7,6 +7,8 @@ import scipy.sparse
 import pytest
 
 import rasa.shared.utils.io
+from nlu.constants import TOKENS_NAMES
+from nlu.tokenizers.tokenizer import Token
 from rasa.shared.core.constants import USER_INTENT_OUT_OF_SCOPE
 from rasa.shared.nlu.constants import (
     TEXT,
@@ -17,6 +19,7 @@ from rasa.shared.nlu.constants import (
     ENTITY_ATTRIBUTE_TYPE,
     ENTITIES,
     FEATURE_TYPE_SEQUENCE,
+    INTENT,
 )
 from rasa.nlu.convert import convert_training_data
 from rasa.nlu.extractors.mitie_entity_extractor import MitieEntityExtractor
@@ -697,7 +700,26 @@ def test_persist_load_training_data_chunk(tmp_path: Path):
                     TEXT,
                     "regex",
                 ),
-            ]
+            ],
+            data={
+                TEXT: "Rasa is a great company!",
+                INTENT: "inform",
+                ENTITIES: [
+                    {
+                        ENTITY_ATTRIBUTE_TYPE: "company",
+                        ENTITY_ATTRIBUTE_END: 4,
+                        ENTITY_ATTRIBUTE_START: 0,
+                        ENTITY_ATTRIBUTE_VALUE: "Rasa",
+                    }
+                ],
+                TOKENS_NAMES[TEXT]: [
+                    Token("Rasa", 0),
+                    Token("is", 5),
+                    Token("a", 8),
+                    Token("great", 10),
+                    Token("company", 16),
+                ],
+            },
         )
     ]
 
@@ -709,9 +731,9 @@ def test_persist_load_training_data_chunk(tmp_path: Path):
     loaded_fingerprint = loaded_training_data_chunk.fingerprint()
 
     # make sure the persisted data and the loaded data is the same
-    assert original_fingerprint == loaded_fingerprint
     loaded_message = loaded_training_data_chunk.training_examples[0]
     assert messages[0] == loaded_message
+    assert original_fingerprint == loaded_fingerprint
 
 
 @pytest.mark.parametrize(
