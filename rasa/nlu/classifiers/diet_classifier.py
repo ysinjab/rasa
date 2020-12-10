@@ -635,7 +635,7 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
         label_attribute: Optional[Text] = None,
         training: bool = True,
     ) -> RasaModelData:
-        """Prepare data for training and create a RasaModelData object"""
+        """Prepare data for training and create a RasaModelData object."""
         from rasa.utils.tensorflow import model_data_utils
 
         attributes_to_consider = [TEXT]

@@ -128,7 +128,6 @@ class Policy:
         Returns:
             the dictionary of parameters
         """
-
         valid_keys = rasa.shared.utils.common.arguments_of(func)
 
         params = {key: kwargs.get(key) for key in valid_keys if kwargs.get(key)}
@@ -167,7 +166,6 @@ class Policy:
             - the label ids (e.g. action ids) for every dialogue turn in all training
               trackers
         """
-
         state_features, label_ids, entity_tags = self.featurizer.featurize_trackers(
             training_trackers, domain, interpreter
         )
@@ -199,7 +197,6 @@ class Policy:
             domain: the :class:`rasa.shared.core.domain.Domain`
             interpreter: Interpreter which can be used by the polices for featurization.
         """
-
         raise NotImplementedError("Policy must have the capacity to train.")
 
     def train_chunk(
@@ -329,7 +326,6 @@ class Policy:
         Returns:
             the list of the length of the number of actions
         """
-
         return [0.0] * domain.num_actions
 
     def format_tracker_states(self, states: List[Dict]) -> Text:
@@ -491,7 +487,6 @@ def confidence_scores_for(
     Returns:
         the list of the length of the number of actions
     """
-
     results = [0.0] * domain.num_actions
     idx = domain.index_for_action(action_name)
     results[idx] = value
