@@ -34,7 +34,12 @@ class EntitySynonymMapper(EntityExtractor):
         component_config: Optional[Dict[Text, Any]] = None,
         synonyms: Optional[Dict[Text, Any]] = None,
     ) -> None:
+        """Initializes the entity synonym mapper.
 
+        Args:
+            component_config: The component configuration.
+            synonyms: The synonyms to use.
+        """
         super().__init__(component_config)
 
         self.synonyms = synonyms if synonyms else {}
@@ -49,8 +54,7 @@ class EntitySynonymMapper(EntityExtractor):
 
         See parent class for more information.
         """
-        for key, value in list(training_data.entity_synonyms.items()):
-            self._add_entities_if_synonyms(key, value)
+        self._add_synonyms_from_data(training_data)
 
     def train(
         self,
@@ -59,7 +63,7 @@ class EntitySynonymMapper(EntityExtractor):
         **kwargs: Any,
     ) -> None:
         """Train this component."""
-        self.prepare_partial_training(training_data, config, **kwargs)
+        self._add_synonyms_from_data(training_data)
         self._process_entity_examples(training_data.entity_synonyms)
 
     def train_chunk(
@@ -68,13 +72,18 @@ class EntitySynonymMapper(EntityExtractor):
         config: Optional[RasaNLUModelConfig] = None,
         **kwargs: Any,
     ) -> None:
-        """Train this component on the given chunk.
+        """Trains this component using the list of data chunk files.
 
         See parent class for more information.
         """
         for data_chunk in data_chunk_files:
             training_data_chunk = TrainingDataChunk.load_chunk(data_chunk.file_path)
             self._process_entity_examples(training_data_chunk.entity_examples)
+
+    def _add_synonyms_from_data(self, training_data: TrainingData) -> None:
+        """Adds synonyms from data to the list of synonyms."""
+        for key, value in list(training_data.entity_synonyms.items()):
+            self._add_entities_if_synonyms(key, value)
 
     def _process_entity_examples(self, entity_examples: List[Message]) -> None:
         for example in entity_examples:

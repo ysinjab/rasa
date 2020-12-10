@@ -819,6 +819,13 @@ class TrainingDataChunk(TrainingData):
     def _to_tf_features(
         self, features: List[Features], message_data: Dict[Text, Any]
     ) -> Dict[Text, tf.train.Feature]:
+        tf_features = self._encode_message_features(features)
+        tf_features.update(self._encode_message_data(message_data))
+        return tf_features
+
+    def _encode_message_features(
+        self, features: List[Features]
+    ) -> Dict[Text, tf.train.Feature]:
         tf_features = {}
 
         for feature in features:
@@ -847,12 +854,10 @@ class TrainingDataChunk(TrainingData):
                     f"{key}{TF_RECORD_KEY_SEPARATOR}column"
                 ] = self._int_feature(column)
 
-        tf_features.update(self._encode_message_data(message_data))
-
         return tf_features
 
     @staticmethod
-    def relevant_message_data_keys() -> List[Text]:
+    def _relevant_message_data_keys() -> List[Text]:
         from nlu.constants import TOKENS_NAMES
 
         return [
@@ -871,7 +876,7 @@ class TrainingDataChunk(TrainingData):
 
         tf_message_data = {}
 
-        for data_key in TrainingDataChunk.relevant_message_data_keys():
+        for data_key in TrainingDataChunk._relevant_message_data_keys():
             if data_key not in data or not data[data_key]:
                 continue
 
@@ -885,13 +890,13 @@ class TrainingDataChunk(TrainingData):
                         f"{data_key}{TF_RECORD_KEY_SEPARATOR}{idx}"
                     ] = self._bytes_feature(entity_str)
             elif data_key == TOKENS_NAMES[TEXT]:
-                # tokens are a list of strings
+                # tokens are a list of token objects
                 for idx, token in enumerate(value):
                     tf_message_data[
                         f"{data_key}{TF_RECORD_KEY_SEPARATOR}{idx}"
                     ] = self._bytes_feature(json.dumps(token.__dict__))
             else:
-                # all other values should be simple strings
+                # all other values are simple strings
                 tf_message_data[data_key] = self._bytes_feature(value)
 
         return tf_message_data
@@ -948,13 +953,13 @@ class TrainingDataChunk(TrainingData):
 
             for key in example.features.feature.keys():
                 if (
-                    key in cls.relevant_message_data_keys()
+                    key in cls._relevant_message_data_keys()
                     or key.startswith(ENTITIES)
                     or key.startswith(TOKENS_NAMES[TEXT])
                 ):
                     cls._decode_message_data(example, key, message_data)
                 else:
-                    cls._decode_features(example, key, features)
+                    features.append(cls._decode_features(example, key))
 
             training_examples.append(Message(features=features, data=message_data))
 
@@ -980,9 +985,7 @@ class TrainingDataChunk(TrainingData):
             message_data[key] = text
 
     @classmethod
-    def _decode_features(
-        cls, example: tf.train.Example, key: Text, features: List[Features]
-    ) -> None:
+    def _decode_features(cls, example: tf.train.Example, key: Text) -> Features:
         (
             attribute,
             feature_type,
@@ -990,14 +993,12 @@ class TrainingDataChunk(TrainingData):
             is_dense,
             extra_info,
         ) = TrainingDataChunk._deconstruct_tf_record_key(key)
-        if is_dense:
-            features.append(
-                cls._convert_to_numpy(example, attribute, feature_type, origin)
-            )
 
+        if is_dense:
+            return cls._convert_to_numpy(example, attribute, feature_type, origin)
         elif not is_dense and extra_info == "data":
-            features.append(
-                cls._convert_to_sparse_matrix(example, attribute, feature_type, origin)
+            return cls._convert_to_sparse_matrix(
+                example, attribute, feature_type, origin
             )
 
     @classmethod

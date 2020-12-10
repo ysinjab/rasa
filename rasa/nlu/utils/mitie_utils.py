@@ -12,6 +12,7 @@ if typing.TYPE_CHECKING:
 
 
 class MitieNLP(Component):
+    """Component that loads the MITIE language model."""
 
     defaults = {
         # name of the language model to load - this contains
@@ -97,6 +98,10 @@ class MitieNLP(Component):
         cached_component: Optional["MitieNLP"] = None,
         **kwargs: Any,
     ) -> "MitieNLP":
+        """Load this component from file.
+
+        See parent class for more information.
+        """
         import mitie
 
         if cached_component:
@@ -106,7 +111,10 @@ class MitieNLP(Component):
         return cls(meta, mitie.total_word_feature_extractor(mitie_file))
 
     def persist(self, file_name: Text, model_dir: Text) -> Optional[Dict[Text, Any]]:
+        """Persist this component to disk for future loading.
 
+        See parent class for more information.
+        """
         return {
             "mitie_feature_extractor_fingerprint": self.extractor.fingerprint,
             "model": self.component_config.get("model"),

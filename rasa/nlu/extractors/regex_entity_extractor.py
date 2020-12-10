@@ -95,7 +95,7 @@ class RegexEntityExtractor(EntityExtractor):
         **kwargs: Any,
     ) -> None:
         """Train this component."""
-        self.prepare_partial_training(training_data, config)
+        self._add_patterns_from_data(training_data)
 
     def prepare_partial_training(
         self,
@@ -107,6 +107,10 @@ class RegexEntityExtractor(EntityExtractor):
 
         See parent class for more information.
         """
+        self._add_patterns_from_data(training_data)
+
+    def _add_patterns_from_data(self, training_data: TrainingData,) -> None:
+        """Extracts the relevant regex pattern from the given training data."""
         if self.entity_names is None:
             self.entity_names = training_data.entities
 

@@ -12,6 +12,11 @@ class Featurizer(Component):
     """Abstract featurizer component."""
 
     def __init__(self, component_config: Optional[Dict[Text, Any]] = None) -> None:
+        """Initializes the featurizer.
+
+        Args:
+            component_config: The component configuration.
+        """
         if not component_config:
             component_config = {}
 
@@ -45,6 +50,8 @@ class Featurizer(Component):
 
 
 class DenseFeaturizer(Featurizer):
+    """Abstract dense featurizer component."""
+
     @staticmethod
     def _calculate_sentence_features(
         features: np.ndarray, pooling_operation: Text
@@ -70,4 +77,6 @@ class DenseFeaturizer(Featurizer):
 
 
 class SparseFeaturizer(Featurizer):
+    """Abstract sparse featurizer component."""
+
     pass

@@ -20,6 +20,8 @@ if typing.TYPE_CHECKING:
 
 
 class MitieIntentClassifier(IntentClassifier):
+    """Intent classifier that uses the library MITIE."""
+
     @classmethod
     def required_components(cls) -> List[Type[Component]]:
         """Specifies which components need to be present in the pipeline."""

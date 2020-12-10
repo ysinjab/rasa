@@ -18,6 +18,7 @@ if typing.TYPE_CHECKING:
 
 
 class SpacyNLP(Component):
+    """Component that loads the SpaCy language model."""
 
     defaults = {
         # name of the language model to load - if it is not set
@@ -225,7 +226,10 @@ class SpacyNLP(Component):
         config: Optional[RasaNLUModelConfig] = None,
         **kwargs: Any,
     ) -> None:
+        """Train this component.
 
+        See parent class for more information.
+        """
         attribute_docs = self._docs_for_training_examples(
             training_data.training_examples
         )
