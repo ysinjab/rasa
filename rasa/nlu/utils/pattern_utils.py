@@ -7,17 +7,17 @@ from rasa.shared.nlu.training_data.training_data import TrainingData
 
 def _convert_lookup_tables_to_regex(
     training_data: TrainingData,
-    use_word_boundaries: bool = True,
     pattern_names: Optional[List[Text]] = None,
+    use_word_boundaries: bool = True,
 ) -> List[Dict[Text, Text]]:
     r"""Convert the lookup tables from the training data to regex patterns.
 
     Args:
         training_data: The training data.
-        use_word_boundaries: If True add `\b` around the regex expression
-          for each lookup table expressions.
         pattern_names: List of pattern names to use. If list is empty or `None` all
           patterns will be used.
+        use_word_boundaries: If True add `\b` around the regex expression
+          for each lookup table expressions.
 
     Returns:
         A list of regex patterns.
@@ -149,7 +149,7 @@ def extract_patterns(
     if use_lookup_tables:
         patterns.extend(
             _convert_lookup_tables_to_regex(
-                training_data, use_word_boundaries, patter_names
+                training_data, patter_names, use_word_boundaries
             )
         )
 
