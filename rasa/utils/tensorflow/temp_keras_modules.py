@@ -253,6 +253,6 @@ class CustomDataHandler(DataHandler):
                     data_iterator = iter(self._dataset)
                     # update number of steps for epoch as we might have an increasing
                     # batch size
-                    self._inferred_steps = self._infer_steps(None, self._dataset)
+                    self._inferred_steps = len(self._adapter._keras_sequence)
                 yield epoch, data_iterator
                 self._adapter.on_epoch_end()
