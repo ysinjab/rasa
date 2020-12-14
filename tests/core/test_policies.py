@@ -409,13 +409,6 @@ class TestTEDPolicy(PolicyTestCollection):
         )
         batch_size = 2
 
-        for k, v in model_data.items():
-            print(k)
-            for _k, _v in v.items():
-                print("  ", _k)
-                for __v in _v:
-                    print("    ", __v.shape)
-
         data_generator = FixBatchSizeDataGenerator(
             model_data, batch_size=batch_size, shuffle=False, batch_strategy="sequence"
         )

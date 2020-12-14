@@ -27,7 +27,7 @@ class RasaDataGenerator(tf.keras.utils.Sequence):
             batch_size: The batch size(s).
             epochs: The total number of epochs.
             batch_strategy: The batch strategy.
-            shuffle: If 'Ture', data should be shuffled.
+            shuffle: If 'True', data should be shuffled.
         """
         self.model_data = model_data
         self.batch_size = batch_size
