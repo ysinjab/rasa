@@ -206,9 +206,8 @@ class TrackerFeaturizer:
 
         return tracker_state_features, label_ids, entity_tags
 
-    @staticmethod
     def _choose_last_user_input(
-        trackers_as_states: List[List[State]], use_text_for_last_user_input: bool
+        self, trackers_as_states: List[List[State]], use_text_for_last_user_input: bool
     ) -> None:
         for states in trackers_as_states:
             last_state = states[-1]
@@ -228,6 +227,9 @@ class TrackerFeaturizer:
                 if last_state.get(USER, {}).get(TEXT):
                     del last_state[USER][TEXT]
 
+        # make sure that all dialogue steps are either intent or text based
+        self._remove_user_text_if_intent(trackers_as_states)
+
     def prediction_states(
         self,
         trackers: List[DialogueStateTracker],
@@ -239,7 +241,8 @@ class TrackerFeaturizer:
         Args:
             trackers: The trackers to transform
             domain: The domain
-            use_text_for_last_user_input: Indicates whether to use text or intent label for featurizing last user input.
+            use_text_for_last_user_input: Indicates whether to use text or intent label
+                for featurizing last user input.
 
         Returns:
             A list of states.
@@ -261,7 +264,8 @@ class TrackerFeaturizer:
             trackers: A list of state trackers
             domain: The domain
             interpreter: The interpreter
-            use_text_for_last_user_input: boolean
+            use_text_for_last_user_input: Indicates whether to use text or intent label
+                for featurizing last user input.
 
         Returns:
             A dictionary of state type (INTENT, TEXT, ACTION_NAME, ACTION_TEXT,
@@ -395,7 +399,8 @@ class FullDialogueTrackerFeaturizer(TrackerFeaturizer):
         Args:
             trackers: The trackers to transform
             domain: The domain,
-            use_text_for_last_user_input: boolean
+            use_text_for_last_user_input: Indicates whether to use text or intent label
+                for featurizing last user input.
 
         Returns:
             A list of states.
@@ -549,7 +554,8 @@ class MaxHistoryTrackerFeaturizer(TrackerFeaturizer):
         Args:
             trackers: The trackers to transform
             domain: The domain
-            use_text_for_last_user_input: boolean
+            use_text_for_last_user_input: Indicates whether to use text or intent label
+                for featurizing last user input.
 
         Returns:
             A list of states.
