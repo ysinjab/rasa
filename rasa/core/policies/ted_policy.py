@@ -396,11 +396,6 @@ class TEDPolicy(Policy):
             label_ids = np.array(
                 [np.expand_dims(seq_label_ids, -1) for seq_label_ids in label_ids]
             )
-            model_data.add_features(
-                LABEL_KEY,
-                LABEL_SUB_KEY,
-                [FeatureArray(label_ids, number_of_dimensions=3)],
-            )
 
             attribute_data, self.fake_features = convert_to_data_format(
                 tracker_state_features, featurizers=self.config[FEATURIZERS]
@@ -425,6 +420,13 @@ class TEDPolicy(Policy):
                 self.fake_features,
                 featurizers=self.config[FEATURIZERS],
             )
+            label_ids = np.atleast_3d(
+                np.tile(label_ids, (len(tracker_state_features), 1))
+            )
+
+        model_data.add_features(
+            LABEL_KEY, LABEL_SUB_KEY, [FeatureArray(label_ids, number_of_dimensions=3)],
+        )
 
         model_data.add_data(attribute_data)
         model_data.add_lengths(TEXT, SEQUENCE_LENGTH, TEXT, SEQUENCE)
@@ -512,7 +514,7 @@ class TEDPolicy(Policy):
         domain: Domain,
         interpreter: NaturalLanguageInterpreter,
     ) -> List[List[Dict[Text, List["Features"]]]]:
-        # Construct two examples in the batch to be fed to the model - 
+        # Construct two examples in the batch to be fed to the model -
         # One by featurizing last user text and second an optional one(see conditions below).
         # the first example in the constructed batch either does not contain user input
         # or uses intent or text based on whether TED is e2e only.
@@ -563,6 +565,7 @@ class TEDPolicy(Policy):
         tracker: DialogueStateTracker,
         domain: Domain,
         interpreter: NaturalLanguageInterpreter,
+        action_index: int,
         **kwargs: Any,
     ) -> PolicyPrediction:
         """Predicts the next action the bot should take.
@@ -576,7 +579,9 @@ class TEDPolicy(Policy):
         tracker_state_features = self._featurize_tracker_for_e2e(
             tracker, domain, interpreter
         )
-        model_data = self._create_model_data(tracker_state_features)
+        model_data = self._create_model_data(
+            tracker_state_features, label_ids=np.array([[action_index]])
+        )
 
         output = self.model.predict(model_data)
 
@@ -767,7 +772,11 @@ class TEDPolicy(Policy):
                 for feature_name, features in model_data_example.items()
                 if feature_name
                 # we need to remove label features for prediction if they are present
-                in STATE_LEVEL_FEATURES + SENTENCE_FEATURES_TO_ENCODE + [DIALOGUE]
+                # do not remove label as this is needed for rec@20
+                in STATE_LEVEL_FEATURES
+                + SENTENCE_FEATURES_TO_ENCODE
+                + [DIALOGUE]
+                + [LABEL]
             },
         )
         model.build_for_predict(predict_data_example)
