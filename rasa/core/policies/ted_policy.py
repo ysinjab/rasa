@@ -781,6 +781,7 @@ class TEDPolicy(Policy):
 
         model = TED.load(
             str(tf_model_file),
+            model_data_example,
             data_signature=model_data_example.get_signature(),
             config=meta,
             # during prediction we don't care about previous dialogue turns,

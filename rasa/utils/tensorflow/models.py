@@ -51,7 +51,10 @@ from rasa.utils.tensorflow.constants import (
 from rasa.utils.tensorflow import layers
 from rasa.utils.tensorflow.transformer import TransformerEncoder
 from rasa.utils.tensorflow.temp_keras_modules import TmpKerasModel
-from rasa.utils.tensorflow.data_generator import RasaDataGenerator
+from rasa.utils.tensorflow.data_generator import (
+    RasaDataGenerator,
+    FixBatchSizeDataGenerator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +214,9 @@ class RasaModel(TmpKerasModel):
         self.save_weights(model_file_name, overwrite=overwrite, save_format="tf")
 
     @classmethod
-    def load(cls, model_file_name: Text, *args, **kwargs) -> "RasaModel":
+    def load(
+        cls, model_file_name: Text, model_data_example: RasaModelData, *args, **kwargs
+    ) -> "RasaModel":
         """Loads the model from the given file.
 
         Args:
@@ -223,6 +228,10 @@ class RasaModel(TmpKerasModel):
         logger.debug("Loading the model ...")
         # create empty model
         model = cls(*args, **kwargs)
+        # need to train on 1 example to build weights of the correct size
+        model.compile(run_eagerly=True)
+        data_generator = FixBatchSizeDataGenerator(model_data_example, batch_size=1)
+        model.fit(data_generator, verbose=False)
         # load trained weights
         model.load_weights(model_file_name)
 

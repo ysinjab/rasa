@@ -1098,6 +1098,7 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
 
         return cls.model_class().load(
             tf_model_file,
+            model_data_example,
             data_signature=model_data_example.get_signature(),
             label_data=label_data,
             entity_tag_specs=entity_tag_specs,

@@ -462,6 +462,7 @@ class ResponseSelector(DIETClassifier):
 
         return cls.model_class(meta[USE_TEXT_AS_LABEL]).load(
             tf_model_file,
+            model_data_example,
             data_signature=model_data_example.get_signature(),
             label_data=label_data,
             entity_tag_specs=entity_tag_specs,
