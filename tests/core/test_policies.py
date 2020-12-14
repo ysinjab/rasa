@@ -48,7 +48,7 @@ from rasa.core.policies.memoization import AugmentedMemoizationPolicy, Memoizati
 from rasa.core.policies.sklearn_policy import SklearnPolicy
 from rasa.shared.core.trackers import DialogueStateTracker
 from rasa.shared.nlu.training_data.formats.markdown import INTENT
-from rasa.utils.tensorflow.data_generator import FixBatchSizeDataGenerator
+from rasa.utils.tensorflow.data_generator import IncreasingBatchSizeDataGenerator
 from rasa.utils.tensorflow.constants import (
     SIMILARITY_TYPE,
     RANKING_LENGTH,
@@ -408,8 +408,7 @@ class TestTEDPolicy(PolicyTestCollection):
             training_data, label_ids, entity_tags, all_labels
         )
         batch_size = 2
-
-        data_generator = FixBatchSizeDataGenerator(
+        data_generator = IncreasingBatchSizeDataGenerator(
             model_data, batch_size=batch_size, shuffle=False, batch_strategy="sequence"
         )
         iterator = iter(data_generator)
@@ -476,7 +475,7 @@ class TestTEDPolicy(PolicyTestCollection):
             or batch_slots_sentence_shape[1] == 0
         )
 
-        data_generator = FixBatchSizeDataGenerator(
+        data_generator = IncreasingBatchSizeDataGenerator(
             model_data, batch_size=batch_size, shuffle=True, batch_strategy="balanced"
         )
         iterator = iter(data_generator)
