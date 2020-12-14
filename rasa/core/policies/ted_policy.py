@@ -102,7 +102,7 @@ from rasa.utils.tensorflow.constants import (
     FEATURIZERS,
     ENTITY_RECOGNITION,
 )
-from rasa.utils.tensorflow.data_generator import FixBatchSizeDataGenerator
+from rasa.utils.tensorflow.data_generator import IncreasingBatchSizeDataGenerator
 from rasa.shared.core.events import DefinePrevUserUtteredEntities, Event
 from rasa.shared.nlu.training_data.message import Message
 
@@ -602,7 +602,7 @@ class TEDPolicy(Policy):
         )
         model_data = self._create_model_data(tracker_state_features)
 
-        data_generator = FixBatchSizeDataGenerator(
+        data_generator = IncreasingBatchSizeDataGenerator(
             model_data, batch_size=len(tracker_state_features)
         )
         output = self.model.predict(data_generator)
