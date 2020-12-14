@@ -336,7 +336,7 @@ class RasaDataGenerator(tf.keras.utils.Sequence):
         )
 
 
-class IncreasingBatchSizeDataGenerator(RasaDataGenerator):
+class RasaBatchDataGenerator(RasaDataGenerator):
     """Data generator with an optional increasing batch size."""
 
     def __init__(

@@ -6,14 +6,14 @@ import numpy as np
 from rasa.utils.tensorflow.model_data import FeatureArray, RasaModelData
 from rasa.utils.tensorflow.data_generator import (
     RasaDataGenerator,
-    IncreasingBatchSizeDataGenerator,
+    RasaBatchDataGenerator,
 )
 
 
 def test_data_generator_with_increasing_batch_size(model_data: RasaModelData):
     epochs = 2
 
-    data_generator = IncreasingBatchSizeDataGenerator(
+    data_generator = RasaBatchDataGenerator(
         model_data,
         batch_size=[1, 2],
         epochs=epochs,
@@ -41,7 +41,7 @@ def test_data_generator_with_increasing_batch_size(model_data: RasaModelData):
 
 
 def test_data_generator_with_fixed_batch_size(model_data: RasaModelData):
-    data_generator = IncreasingBatchSizeDataGenerator(
+    data_generator = RasaBatchDataGenerator(
         model_data, batch_size=2, epochs=1, batch_strategy="balanced", shuffle=True
     )
 

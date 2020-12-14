@@ -25,7 +25,7 @@ from rasa.utils.tensorflow.constants import (
     SEQUENCE,
 )
 from rasa.utils.tensorflow.callback import RasaTrainingLogger, RasaModelCheckpoint
-from rasa.utils.tensorflow.data_generator import IncreasingBatchSizeDataGenerator
+from rasa.utils.tensorflow.data_generator import RasaBatchDataGenerator
 from rasa.utils.tensorflow.model_data import RasaModelData
 
 if TYPE_CHECKING:
@@ -205,9 +205,7 @@ def create_data_generators(
     batch_strategy: Text = SEQUENCE,
     eval_num_examples: int = 0,
     random_seed: Optional[int] = None,
-) -> Tuple[
-    IncreasingBatchSizeDataGenerator, Optional[IncreasingBatchSizeDataGenerator]
-]:
+) -> Tuple[RasaBatchDataGenerator, Optional[RasaBatchDataGenerator]]:
     """Create data generators for train and optional validation data.
 
     Args:
@@ -226,7 +224,7 @@ def create_data_generators(
         model_data, evaluation_model_data = model_data.split(
             eval_num_examples, random_seed,
         )
-        validation_data_generator = IncreasingBatchSizeDataGenerator(
+        validation_data_generator = RasaBatchDataGenerator(
             evaluation_model_data,
             batch_size=batch_sizes,
             epochs=epochs,
@@ -234,7 +232,7 @@ def create_data_generators(
             shuffle=True,
         )
 
-    data_generator = IncreasingBatchSizeDataGenerator(
+    data_generator = RasaBatchDataGenerator(
         model_data,
         batch_size=batch_sizes,
         epochs=epochs,
