@@ -351,7 +351,7 @@ class IncreasingBatchSizeDataGenerator(RasaDataGenerator):
             batch_size: The batch size.
             epochs: The total number of epochs.
             batch_strategy: The batch strategy.
-            shuffle: If 'Ture', data will be shuffled.
+            shuffle: If 'True', data will be shuffled.
         """
         self.current_epoch = -1
         self.current_batch_size = None
@@ -435,7 +435,7 @@ class FixBatchSizeDataGenerator(RasaDataGenerator):
             batch_size: The batch size.
             epochs: The total number of epochs.
             batch_strategy: The batch strategy.
-            shuffle: If 'Ture', data will be shuffled.
+            shuffle: If 'True', data will be shuffled.
         """
         if not isinstance(batch_size, int):
             rasa.shared.utils.io.raise_warning(
