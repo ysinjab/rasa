@@ -67,7 +67,7 @@ def test_surface_attributes():
                 features=np.random.rand(shape),
                 attribute=INTENT,
                 feature_type=SENTENCE,
-                origin="featuirzer-a",
+                origin="featurizer-a",
             ),
             Features(
                 features=np.random.rand(shape),
