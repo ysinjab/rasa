@@ -48,7 +48,7 @@ def train(
     domain: Text,
     config: Text,
     training_files: Union[Text, List[Text]],
-    output_path: Text = DEFAULT_MODELS_PATH,
+    output: Text = DEFAULT_MODELS_PATH,
     dry_run: bool = False,
     force_training: bool = False,
     fixed_model_name: Optional[Text] = None,
@@ -64,7 +64,7 @@ def train(
         domain: Path to the domain file.
         config: Path to the config for Core and NLU.
         training_files: Paths to the training data for Core and NLU.
-        output_path: Output path.
+        output: Output path.
         dry_run: If `True` then no training will be done, and the information about
             whether the training needs to be done will be printed.
         force_training: If `True` retrain model even if data has not changed.
@@ -86,7 +86,7 @@ def train(
             domain=domain,
             config=config,
             training_files=training_files,
-            output_path=output_path,
+            output=output,
             dry_run=dry_run,
             force_training=force_training,
             fixed_model_name=fixed_model_name,
@@ -103,7 +103,7 @@ async def train_async(
     domain: Union[Domain, Text],
     config: Text,
     training_files: Optional[Union[Text, List[Text]]],
-    output_path: Text = DEFAULT_MODELS_PATH,
+    output: Text = DEFAULT_MODELS_PATH,
     dry_run: bool = False,
     force_training: bool = False,
     fixed_model_name: Optional[Text] = None,
@@ -118,7 +118,7 @@ async def train_async(
         domain: Path to the domain file.
         config: Path to the config for Core and NLU.
         training_files: Paths to the training data for Core and NLU.
-        output_path: Path where the trained model should be stored.
+        output: Path where the trained model should be stored.
         dry_run: If `True` then no training will be done, and the information about
             whether the training needs to be done will be printed.
         force_training: If `True` retrain model even if data has not changed.
@@ -146,7 +146,7 @@ async def train_async(
         if domain.is_empty():
             nlu_model = await _handle_domain_if_not_exists(
                 file_importer,
-                output_path=output_path,
+                output_path=output,
                 fixed_model_name=fixed_model_name,
                 persist_nlu_training_data=persist_nlu_training_data,
                 number_of_chunks=number_of_chunks,
@@ -157,7 +157,7 @@ async def train_async(
         return await _train_async_internal(
             file_importer,
             train_path=train_path,
-            output_path=output_path,
+            output_path=output,
             dry_run=dry_run,
             force_training=force_training,
             fixed_model_name=fixed_model_name,
