@@ -271,7 +271,7 @@ def create_common_callbacks(
     if tensorboard_log_dir:
         if tensorboard_log_level == "minibatch":
             tensorboard_log_level = "batch"
-            rasa.shared.utils.io.raise_warning(
+            rasa.shared.utils.io.raise_deprecation_warning(
                 "You set 'tensorboard_log_level' to 'minibatch'. This value should not "
                 "be used anymore. Please use 'batch' instead."
             )
