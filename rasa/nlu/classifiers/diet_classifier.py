@@ -98,7 +98,7 @@ from rasa.utils.tensorflow.constants import (
 )
 from rasa.utils.tensorflow.data_generator import (
     DataChunkFile,
-    DataChunkGenerator,
+    RasaDataChunkFileGenerator,
     RasaBatchDataGenerator,
 )
 
@@ -803,7 +803,7 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
 
         self.model = self._instantiate_model_class(model_data)
 
-        data_generator = DataChunkGenerator(
+        data_generator = RasaDataChunkFileGenerator(
             data_chunk_files,
             _load_data_func,
             batch_size=self.component_config[BATCH_SIZES],

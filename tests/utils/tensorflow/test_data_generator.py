@@ -9,7 +9,7 @@ import numpy as np
 from rasa.utils.tensorflow.model_data import FeatureArray, RasaModelData
 from rasa.utils.tensorflow.data_generator import (
     RasaDataGenerator,
-    DataChunkGenerator,
+    RasaDataChunkFileGenerator,
     DataChunkFile,
     RasaBatchDataGenerator,
 )
@@ -74,7 +74,7 @@ def test_file_loading_data_generator(model_data: RasaModelData):
         DataChunkFile(Path("chunk5.tfrecord"), 4),
     ]
 
-    data_generator = DataChunkGenerator(
+    data_generator = RasaDataChunkFileGenerator(
         data_chunks, lambda x: RasaModelData(), batch_size=2
     )
 
@@ -108,7 +108,7 @@ def test_file_path_to_load(
         DataChunkFile(Path("chunk2.tfrecord"), 2),
     ]
 
-    data_generator = DataChunkGenerator(
+    data_generator = RasaDataChunkFileGenerator(
         data_chunks, lambda x: RasaModelData(), batch_size=2, shuffle=False
     )
 

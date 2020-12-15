@@ -442,7 +442,7 @@ class DataChunkFile(NamedTuple):
     number_of_examples: int
 
 
-class DataChunkGenerator(RasaDataGenerator):
+class RasaDataChunkFileGenerator(RasaDataGenerator):
     """Data generator for data chunks with a fixed batch size."""
 
     def __init__(
@@ -490,6 +490,7 @@ class DataChunkGenerator(RasaDataGenerator):
                 number_of_examples % batch_size > 0
             )
 
+        # calculate the number of batches per chunk and sum them up
         return sum(
             [
                 _len(data_chunk.number_of_examples, self.batch_size)
@@ -510,12 +511,17 @@ class DataChunkGenerator(RasaDataGenerator):
         end = start + self.batch_size
 
         # determine what file to load
-        file_path, examples_processed_so_far = self._file_path_to_load(start, end)
+        file_path, number_of_examples_of_chunks_before = self._file_path_to_load(
+            start, end
+        )
         # load actual data
         model_data = self.load_data_func(file_path)
 
-        start -= examples_processed_so_far
-        end -= examples_processed_so_far
+        # every chunk file starts counting at 0
+        # substitute the number of examples present in the chunks before from start and
+        # end to get a valid range for the current chunk
+        start -= number_of_examples_of_chunks_before
+        end -= number_of_examples_of_chunks_before
 
         return self.prepare_batch(model_data.data, start, end), None
 
@@ -530,6 +536,12 @@ class DataChunkGenerator(RasaDataGenerator):
         ]
         cumsum_examples = np.cumsum(number_of_examples)
 
+        # Find the data chunk that contains the examples in range [start, end].
+        # Example: chunk 1 has examples 1 to 7 and chunk 2 has examples 7 to 10.
+        # If we want to build a batch with the examples 5 to 9 we take chunk 1, the
+        # batch will only contain examples 5 and 6. E.g. we make sure to load only one
+        # file at a time.
+
         file_path = self.data_chunks[-1].file_path
         data_chunk_index = -1
         for idx in range(len(cumsum_examples) - 1):
@@ -538,8 +550,8 @@ class DataChunkGenerator(RasaDataGenerator):
                 data_chunk_index = idx
                 break
 
-        examples_processed_so_far = (
+        number_of_examples_of_chunks_before = (
             cumsum_examples[data_chunk_index] - number_of_examples[data_chunk_index]
         )
 
-        return file_path, examples_processed_so_far
+        return file_path, number_of_examples_of_chunks_before

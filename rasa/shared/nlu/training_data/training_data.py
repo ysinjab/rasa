@@ -819,7 +819,9 @@ class TrainingDataChunk(TrainingData):
     def _to_tf_features(
         self, features: List[Features], message_data: Dict[Text, Any]
     ) -> Dict[Text, tf.train.Feature]:
+        # encode the actual message features
         tf_features = self._encode_message_features(features)
+        # as well as some message data as those are used, for example, as labels
         tf_features.update(self._encode_message_data(message_data))
         return tf_features
 
