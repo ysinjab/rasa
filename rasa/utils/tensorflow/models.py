@@ -190,7 +190,6 @@ class RasaModel(TmpKerasModel):
         self, batch_in: Union[Tuple[tf.Tensor], Tuple[np.ndarray]]
     ) -> Dict[Text, tf.Tensor]:
         """Predict on batch."""
-        self.prepare_for_predict()
         return self.batch_predict(batch_in)
 
     def _get_metric_results(self, prefix: Optional[Text] = None) -> Dict[Text, float]:
@@ -234,6 +233,8 @@ class RasaModel(TmpKerasModel):
         model.fit(data_generator, verbose=False)
         # load trained weights
         model.load_weights(model_file_name)
+        # prepare the model for prediction
+        model.prepare_for_predict()
 
         logger.debug("Finished loading the model.")
         return model
