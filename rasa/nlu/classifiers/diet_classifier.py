@@ -96,7 +96,7 @@ from rasa.utils.tensorflow.constants import (
     DENSE_DIMENSION,
     MASK,
 )
-from rasa.utils.tensorflow.data_generator import FixBatchSizeDataGenerator
+from rasa.utils.tensorflow.data_generator import RasaBatchDataGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -659,7 +659,7 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
             # no training data are present to train
             return RasaModelData()
 
-        features_for_examples = model_data_utils.convert_training_examples(
+        features_for_examples = model_data_utils.featurize_training_examples(
             training_data,
             attributes_to_consider,
             entity_tag_specs=self._entity_tag_specs,
@@ -681,6 +681,8 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
         )
 
         # make sure all keys are in the same order during training and prediction
+        # as we rely on the order of key and sub-key when constructing the actual
+        # tensors from the model data
         model_data.sort()
 
         return model_data
@@ -838,7 +840,7 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
         # create session data from message and convert it into a batch of 1
         model_data = self._create_model_data([message], training=False)
 
-        data_generator = FixBatchSizeDataGenerator(model_data, batch_size=1)
+        data_generator = RasaBatchDataGenerator(model_data, batch_size=1)
         return self.model.predict(data_generator)
 
     def _predict_label(
@@ -1096,6 +1098,7 @@ class DIETClassifier(IntentClassifier, EntityExtractor):
 
         return cls.model_class().load(
             tf_model_file,
+            model_data_example,
             data_signature=model_data_example.get_signature(),
             label_data=label_data,
             entity_tag_specs=entity_tag_specs,

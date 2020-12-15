@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import secrets
 import sys
 import tempfile
@@ -9,6 +10,7 @@ from unittest.mock import Mock
 
 import pytest
 from _pytest.capture import CaptureFixture
+from _pytest.logging import LogCaptureFixture
 from _pytest.monkeypatch import MonkeyPatch
 
 import rasa.model
@@ -18,7 +20,7 @@ import rasa.shared.importers.autoconfig as autoconfig
 import rasa.shared.utils.io
 from rasa.core.interpreter import RasaNLUInterpreter
 
-from rasa.train import train_core, train_nlu, train
+from rasa.train import train_core, train_nlu, train, dry_run_result
 from tests.conftest import DEFAULT_CONFIG_PATH, DEFAULT_NLU_DATA
 from tests.core.conftest import DEFAULT_DOMAIN_PATH_WITH_SLOTS, DEFAULT_STORIES_FILE
 from tests.core.test_model import _fingerprint
@@ -384,14 +386,42 @@ def new_model_path_in_same_dir(old_model_path) -> str:
 
 
 class TestE2e:
+    def test_e2e_gives_experimental_warning(
+        self,
+        monkeypatch: MonkeyPatch,
+        trained_e2e_model: Text,
+        default_domain_path: Text,
+        default_stack_config: Text,
+        default_e2e_stories_file: Text,
+        default_nlu_data: Text,
+        caplog: LogCaptureFixture,
+    ):
+        mock_nlu_training(monkeypatch)
+        mock_core_training(monkeypatch)
+
+        with caplog.at_level(logging.WARNING):
+            train(
+                default_domain_path,
+                default_stack_config,
+                [default_e2e_stories_file, default_nlu_data],
+                output=new_model_path_in_same_dir(trained_e2e_model),
+            )
+
+        assert any(
+            [
+                "The end-to-end training is currently experimental" in record.message
+                for record in caplog.records
+            ]
+        )
+
     def test_models_not_retrained_if_no_new_data(
         self,
         monkeypatch: MonkeyPatch,
         trained_e2e_model: Text,
-        default_domain_path,
-        default_stack_config,
-        default_e2e_stories_file,
-        default_nlu_data,
+        default_domain_path: Text,
+        default_stack_config: Text,
+        default_e2e_stories_file: Text,
+        default_nlu_data: Text,
     ):
         mocked_nlu_training = mock_nlu_training(monkeypatch)
         mocked_core_training = mock_core_training(monkeypatch)
@@ -410,10 +440,10 @@ class TestE2e:
         self,
         monkeypatch: MonkeyPatch,
         trained_e2e_model: Text,
-        default_domain_path,
-        default_stack_config,
-        default_e2e_stories_file,
-        default_nlu_data,
+        default_domain_path: Text,
+        default_stack_config: Text,
+        default_e2e_stories_file: Text,
+        default_nlu_data: Text,
     ):
         stories_yaml = rasa.shared.utils.io.read_yaml_file(default_e2e_stories_file)
         stories_yaml["stories"][1]["steps"].append({"user": "new message!"})
@@ -430,7 +460,7 @@ class TestE2e:
             default_stack_config,
             [new_stories_file, default_nlu_data],
             output=new_model_path_in_same_dir(trained_e2e_model),
-        )
+        ).model
         os.remove(new_model_path)
 
         mocked_core_training.assert_called_once()
@@ -440,10 +470,10 @@ class TestE2e:
         self,
         monkeypatch: MonkeyPatch,
         trained_e2e_model: Text,
-        default_domain_path,
-        default_stack_config,
-        default_e2e_stories_file,
-        default_nlu_data,
+        default_domain_path: Text,
+        default_stack_config: Text,
+        default_e2e_stories_file: Text,
+        default_nlu_data: Text,
     ):
         stories_yaml = rasa.shared.utils.io.read_yaml_file(default_e2e_stories_file)
         stories_yaml["stories"][1]["steps"].append({"user": "Yes"})
@@ -460,7 +490,7 @@ class TestE2e:
             default_stack_config,
             [new_stories_file, default_nlu_data],
             output=new_model_path_in_same_dir(trained_e2e_model),
-        )
+        ).model
         os.remove(new_model_path)
 
         mocked_core_training.assert_called_once()
@@ -469,10 +499,10 @@ class TestE2e:
     def test_nlu_and_core_trained_if_no_nlu_data_but_e2e_stories(
         self,
         monkeypatch: MonkeyPatch,
-        default_domain_path,
-        default_stack_config,
-        default_e2e_stories_file,
-        tmp_path,
+        default_domain_path: Text,
+        default_stack_config: Text,
+        default_e2e_stories_file: Text,
+        tmp_path: Path,
     ):
 
         mocked_nlu_training = mock_nlu_training(monkeypatch)
@@ -498,10 +528,10 @@ class TestE2e:
         self,
         monkeypatch: MonkeyPatch,
         trained_e2e_model: Text,
-        default_domain_path,
-        default_stack_config,
-        default_e2e_stories_file,
-        default_nlu_data,
+        default_domain_path: Text,
+        default_stack_config: Text,
+        default_e2e_stories_file: Text,
+        default_nlu_data: Text,
     ):
         nlu_yaml = rasa.shared.utils.io.read_yaml_file(default_nlu_data)
         nlu_yaml["nlu"][0]["examples"] += "- surprise!\n"
@@ -518,7 +548,7 @@ class TestE2e:
             default_stack_config,
             [default_e2e_stories_file, new_nlu_file],
             output=new_model_path_in_same_dir(trained_e2e_model),
-        )
+        ).model
         os.remove(new_model_path)
 
         mocked_core_training.assert_called_once()
@@ -528,10 +558,10 @@ class TestE2e:
         self,
         monkeypatch: MonkeyPatch,
         trained_simple_rasa_model: Text,
-        default_domain_path,
-        default_stack_config,
-        simple_stories_file,
-        default_nlu_data,
+        default_domain_path: Text,
+        default_stack_config: Text,
+        simple_stories_file: Text,
+        default_nlu_data: Text,
     ):
         nlu_yaml = rasa.shared.utils.io.read_yaml_file(default_nlu_data)
         nlu_yaml["nlu"][0]["examples"] += "- surprise!\n"
@@ -548,7 +578,7 @@ class TestE2e:
             default_stack_config,
             [simple_stories_file, new_nlu_file],
             output=new_model_path_in_same_dir(trained_simple_rasa_model),
-        )
+        ).model
         os.remove(new_model_path)
 
         mocked_core_training.assert_not_called()
@@ -558,10 +588,10 @@ class TestE2e:
         self,
         capsys: CaptureFixture,
         monkeypatch: MonkeyPatch,
-        tmp_path,
-        default_domain_path,
-        default_stack_config,
-        default_e2e_stories_file,
+        tmp_path: Path,
+        default_domain_path: Text,
+        default_stack_config: Text,
+        default_e2e_stories_file: Text,
     ):
 
         mocked_nlu_training = mock_nlu_training(monkeypatch)
@@ -583,3 +613,51 @@ class TestE2e:
             "Stories file contains e2e stories. "
             + "Please train using `rasa train` so that the NLU model is also trained."
         ) in captured.out
+
+
+@pytest.mark.parametrize(
+    "result, code, texts_count",
+    [
+        (
+            rasa.model.FingerprintComparisonResult(
+                core=False, nlu=False, nlg=False, force_training=True
+            ),
+            0b1000,
+            1,
+        ),
+        (
+            rasa.model.FingerprintComparisonResult(
+                core=True, nlu=True, nlg=True, force_training=True
+            ),
+            0b1000,
+            1,
+        ),
+        (
+            rasa.model.FingerprintComparisonResult(
+                core=False, nlu=False, nlg=True, force_training=False
+            ),
+            0b0100,
+            1,
+        ),
+        (
+            rasa.model.FingerprintComparisonResult(
+                core=True, nlu=True, nlg=True, force_training=False
+            ),
+            0b0111,
+            3,
+        ),
+        (
+            rasa.model.FingerprintComparisonResult(
+                core=False, nlu=False, nlg=False, force_training=False
+            ),
+            0,
+            1,
+        ),
+    ],
+)
+def test_dry_run_result(
+    result: rasa.model.FingerprintComparisonResult, code: int, texts_count: int,
+):
+    result_code, texts = dry_run_result(result)
+    assert result_code == code
+    assert len(texts) == texts_count

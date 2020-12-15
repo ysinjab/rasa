@@ -28,6 +28,9 @@ class TmpKerasModel(tf.keras.models.Model):
     #  https://github.com/tensorflow/tensorflow/pull/45338
     #  is merged and released
 
+    # This code is adapted from
+    # https://github.com/tensorflow/tensorflow/blob/v2.3.1/tensorflow/python/keras/engine/training.py#L824-L1146
+
     @training.enable_multi_worker
     def fit(
         self,
@@ -244,6 +247,10 @@ class CustomDataHandler(DataHandler):
         #  we don't need this anymore once
         #  https://github.com/tensorflow/tensorflow/pull/45338
         #  is merged and released
+
+        # This code is adapted from
+        # https://github.com/tensorflow/tensorflow/blob/v2.3.1/tensorflow/python/keras/engine/data_adapter.py#L1135-L1145
+
         with self._truncate_execution_to_epoch():
             data_iterator = iter(self._dataset)
             for epoch in range(self._initial_epoch, self._epochs):
@@ -253,6 +260,6 @@ class CustomDataHandler(DataHandler):
                     data_iterator = iter(self._dataset)
                     # update number of steps for epoch as we might have an increasing
                     # batch size
-                    self._inferred_steps = self._infer_steps(None, self._dataset)
+                    self._inferred_steps = len(self._adapter._keras_sequence)
                 yield epoch, data_iterator
                 self._adapter.on_epoch_end()
