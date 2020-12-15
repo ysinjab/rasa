@@ -25,7 +25,7 @@ from rasa.utils.tensorflow.constants import (
     SEQUENCE,
 )
 from rasa.utils.tensorflow.callback import RasaTrainingLogger, RasaModelCheckpoint
-from rasa.utils.tensorflow.data_generator import IncreasingBatchSizeDataGenerator
+from rasa.utils.tensorflow.data_generator import RasaBatchDataGenerator
 from rasa.utils.tensorflow.model_data import RasaModelData
 
 if TYPE_CHECKING:
@@ -205,9 +205,7 @@ def create_data_generators(
     batch_strategy: Text = SEQUENCE,
     eval_num_examples: int = 0,
     random_seed: Optional[int] = None,
-) -> Tuple[
-    IncreasingBatchSizeDataGenerator, Optional[IncreasingBatchSizeDataGenerator]
-]:
+) -> Tuple[RasaBatchDataGenerator, Optional[RasaBatchDataGenerator]]:
     """Create data generators for train and optional validation data.
 
     Args:
@@ -226,7 +224,7 @@ def create_data_generators(
         model_data, evaluation_model_data = model_data.split(
             eval_num_examples, random_seed,
         )
-        validation_data_generator = IncreasingBatchSizeDataGenerator(
+        validation_data_generator = RasaBatchDataGenerator(
             evaluation_model_data,
             batch_size=batch_sizes,
             epochs=epochs,
@@ -234,7 +232,7 @@ def create_data_generators(
             shuffle=True,
         )
 
-    data_generator = IncreasingBatchSizeDataGenerator(
+    data_generator = RasaBatchDataGenerator(
         model_data,
         batch_size=batch_sizes,
         epochs=epochs,
@@ -273,7 +271,7 @@ def create_common_callbacks(
     if tensorboard_log_dir:
         if tensorboard_log_level == "minibatch":
             tensorboard_log_level = "batch"
-            rasa.shared.utils.io.raise_warning(
+            rasa.shared.utils.io.raise_deprecation_warning(
                 "You set 'tensorboard_log_level' to 'minibatch'. This value should not "
                 "be used anymore. Please use 'batch' instead."
             )
@@ -298,6 +296,7 @@ def entity_label_to_tags(
     model_predictions: Dict[Text, Any],
     entity_tag_specs: List["EntityTagSpec"],
     bilou_flag: bool = False,
+    prediction_index: int = 0,
 ) -> Tuple[Dict[Text, List[Text]], Dict[Text, List[float]]]:
     """Convert the output predictions for entities to the actual entity tags.
 
@@ -305,6 +304,8 @@ def entity_label_to_tags(
         model_predictions: the output predictions using the entity tag indices
         entity_tag_specs: the entity tag specifications
         bilou_flag: if 'True', the BILOU tagging schema was used
+        prediction_index: the index in the batch of predictions
+            to use for entity extraction
 
     Returns:
         A map of entity tag type, e.g. entity, role, group, to actual entity tags and
@@ -320,8 +321,8 @@ def entity_label_to_tags(
         if not np.any(predictions):
             continue
 
-        confidences = [float(c) for c in confidences[0]]
-        tags = [tag_spec.ids_to_tags[p] for p in predictions[0]]
+        confidences = [float(c) for c in confidences[prediction_index]]
+        tags = [tag_spec.ids_to_tags[p] for p in predictions[prediction_index]]
 
         if bilou_flag:
             (

@@ -18,6 +18,7 @@ def set_train_arguments(parser: argparse.ArgumentParser) -> None:
         parser, help_text="Directory where your models should be stored."
     )
 
+    add_dry_run_param(parser)
     add_augmentation_param(parser)
     add_debug_plots_param(parser)
 
@@ -167,13 +168,37 @@ def add_compare_params(
     )
 
 
-def add_augmentation_param(
+def add_dry_run_param(
     parser: Union[argparse.ArgumentParser, argparse._ActionsContainer]
 ) -> None:
-    """Adds the parameter '--augmentation'.
+    """Adds `--dry-run` argument to a specified `parser`.
 
     Args:
-        parser: the parser to add the arguments to
+        parser: An instance of `ArgumentParser` or `_ActionsContainer`.
+    """
+    parser.add_argument(
+        "--dry-run",
+        default=False,
+        action="store_true",
+        help="If enabled, no actual training will be performed. Instead, "
+        "it will be determined whether a model should be re-trained "
+        "and this information will be printed as the output. The return "
+        "code is a 4-bit bitmask that can also be used to determine what exactly needs "
+        "to be retrained:\n"
+        "- 1 means Core needs to be retrained\n"
+        "- 2 means NLU needs to be retrained\n"
+        "- 4 means responses in the domain should be updated\n"
+        "- 8 means the training was forced (--force argument is specified)",
+    )
+
+
+def add_augmentation_param(
+    parser: Union[argparse.ArgumentParser, argparse._ActionsContainer]
+):
+    """Adds `--augmentation` argument to a specified `parser`.
+
+    Args:
+        parser: An instance of `ArgumentParser` or `_ActionsContainer`.
     """
     parser.add_argument(
         "--augmentation",
